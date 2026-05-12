@@ -1,0 +1,11 @@
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/dist/
+mobile/web-build/
+backend/data/*.sqlite
+backend/data/*.sqlite-shm
+backend/data/*.sqlite-wal
+npm-debug.*
+yarn-debug.*
+yarn-error.*

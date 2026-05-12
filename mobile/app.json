@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "FatBurn",
+    "slug": "fatburn",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f6efe8"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f6efe8"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

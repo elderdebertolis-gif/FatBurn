@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FatBurn Admin</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">FatBurn Admin</p>
+        <h1>Gestao web do instrutor</h1>
+        <p>
+          Use esta pagina para consultar e editar os alunos cadastrados, ajustar os treinos e
+          manter a biblioteca central de exercicios por grupo muscular, objetivo, ambiente e video.
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Base de dados</h2>
+          <p class="muted">
+            Exercicios e usuarios sao lidos da mesma base SQLite usada pelo aplicativo.
+          </p>
+          <div id="server-status" class="item"></div>
+          <div class="actions">
+            <button id="refresh-data">Atualizar dados</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Cadastrar exercicio</h2>
+          <div class="form-grid">
+            <label>
+              <span>Nome</span>
+              <input id="exercise-name" type="text" placeholder="Ex.: Remada unilateral" />
+            </label>
+            <label>
+              <span>Grupo muscular</span>
+              <select id="exercise-group"></select>
+            </label>
+            <label>
+              <span>Objetivo</span>
+              <select id="exercise-goal">
+                <option value="geral">Geral</option>
+                <option value="perda_de_peso">Perda de peso</option>
+                <option value="definicao">Definicao</option>
+              </select>
+            </label>
+            <label>
+              <span>Ambiente</span>
+              <select id="exercise-environment">
+                <option value="academia">Academia</option>
+                <option value="casa">Casa</option>
+              </select>
+            </label>
+            <label>
+              <span>Calorias</span>
+              <input id="exercise-calories" type="number" min="1" placeholder="60" />
+            </label>
+            <label>
+              <span>Equipamento</span>
+              <input id="exercise-equipment" type="text" placeholder="Halteres" />
+            </label>
+            <label>
+              <span>Link do video</span>
+              <input id="exercise-video" type="url" placeholder="https://..." />
+            </label>
+            <label class="full">
+              <span>Descricao</span>
+              <textarea
+                id="exercise-description"
+                rows="4"
+                placeholder="Como o exercicio ajuda e o que trabalha"
+              ></textarea>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="save-exercise">Salvar exercicio</button>
+            <button id="refresh-exercises" class="secondary">Recarregar lista</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card wide">
+          <div class="section-head">
+            <div>
+              <h2>Alunos cadastrados</h2>
+              <p class="muted">Edite cadastro, recalcule a ficha e troque exercicios do treino.</p>
+            </div>
+            <span id="students-count" class="badge">0 alunos</span>
+          </div>
+          <div id="students-list" class="stack"></div>
+        </article>
+
+        <article class="card wide">
+          <div class="section-head">
+            <div>
+              <h2>Biblioteca de exercicios</h2>
+              <p class="muted">Cadastre novos exercicios ou altere os existentes.</p>
+            </div>
+            <span id="exercises-count" class="badge">0 exercicios</span>
+          </div>
+          <div id="exercises-list" class="stack"></div>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
