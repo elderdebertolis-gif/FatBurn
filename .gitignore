@@ -9,3 +9,10 @@ backend/data/*.sqlite-wal
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+node_modules/
+.env
+*.db
+.expo/
+dist/
+build/
+.DS_Store
