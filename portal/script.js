@@ -58,6 +58,8 @@ const state = {
   users: [],
   exercises: [],
   health: null,
+  studentQuery: "",
+  exerciseQuery: "",
 };
 
 function showNotice(message, tone = "info") {
@@ -94,6 +96,22 @@ function optionMarkup(options, selectedValue) {
 function populateGroups() {
   const select = $("#exercise-group");
   select.innerHTML = optionMarkup(groups, "peito");
+}
+
+function normalizeText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesQuery(parts, query) {
+  if (!query) {
+    return true;
+  }
+
+  return normalizeText(parts.filter(Boolean).join(" ")).includes(query);
 }
 
 const API_BASE_URL = "https://fatburn-backend.onrender.com";
@@ -151,7 +169,24 @@ function getCompatibleExercises(user, slot, currentExerciseId) {
 
 function renderUsers() {
   const container = $("#students-list");
-  $("#students-count").textContent = `${state.users.length} aluno(s)`;
+  const query = normalizeText(state.studentQuery);
+  const filteredUsers = state.users.filter((user) =>
+    matchesQuery(
+      [
+        user.name,
+        user.email,
+        objectiveLabels[user.objective] ?? user.objective,
+        environmentLabels[user.trainingEnvironment] ?? user.trainingEnvironment,
+        user.level,
+        user.restrictions,
+      ],
+      query
+    )
+  );
+
+  $("#students-count").textContent = query
+    ? `${filteredUsers.length} de ${state.users.length} aluno(s)`
+    : `${state.users.length} aluno(s)`;
   container.innerHTML = "";
 
   if (!state.users.length) {
@@ -159,7 +194,12 @@ function renderUsers() {
     return;
   }
 
-  state.users.forEach((user) => {
+  if (!filteredUsers.length) {
+    container.innerHTML = "<p class='muted-dark'>Nenhum aluno encontrado para essa pesquisa.</p>";
+    return;
+  }
+
+  filteredUsers.forEach((user) => {
     const article = document.createElement("article");
     article.className = "item";
 
@@ -353,7 +393,24 @@ function renderUsers() {
 
 function renderExercises() {
   const container = $("#exercises-list");
-  $("#exercises-count").textContent = `${state.exercises.length} exercicio(s)`;
+  const query = normalizeText(state.exerciseQuery);
+  const filteredExercises = state.exercises.filter((exercise) =>
+    matchesQuery(
+      [
+        exercise.name,
+        groupLabels[exercise.muscleGroup] ?? exercise.muscleGroup,
+        environmentLabels[exercise.environment] ?? exercise.environment,
+        objectiveLabels[exercise.goal] ?? exercise.goal,
+        exercise.equipment,
+        exercise.description,
+      ],
+      query
+    )
+  );
+
+  $("#exercises-count").textContent = query
+    ? `${filteredExercises.length} de ${state.exercises.length} exercicio(s)`
+    : `${state.exercises.length} exercicio(s)`;
   container.innerHTML = "";
 
   if (!state.exercises.length) {
@@ -361,7 +418,13 @@ function renderExercises() {
     return;
   }
 
-  state.exercises.forEach((exercise) => {
+  if (!filteredExercises.length) {
+    container.innerHTML =
+      "<p class='muted-dark'>Nenhum exercicio encontrado para essa pesquisa.</p>";
+    return;
+  }
+
+  filteredExercises.forEach((exercise) => {
     const article = document.createElement("article");
     article.className = "item";
 
@@ -595,6 +658,16 @@ $("#refresh-exercises").addEventListener("click", () => {
 
 $("#save-exercise").addEventListener("click", () => {
   saveExercise().catch((error) => showNotice(error.message, "error"));
+});
+
+$("#students-search").addEventListener("input", (event) => {
+  state.studentQuery = event.target.value;
+  renderUsers();
+});
+
+$("#exercises-search").addEventListener("input", (event) => {
+  state.exerciseQuery = event.target.value;
+  renderExercises();
 });
 
 document.addEventListener("click", (event) => {

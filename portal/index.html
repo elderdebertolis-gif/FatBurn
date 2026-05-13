@@ -33,10 +33,6 @@
             <span class="hero-pill">Burn calories</span>
           </div>
         </div>
-        <div class="hero-mark">
-          <img class="hero-logo" src="./branding/app-icon.png" alt="FatBurn" />
-          <p>Mesma identidade, mesma base e mesma biblioteca do app mobile.</p>
-        </div>
       </section>
 
       <section class="grid">
@@ -109,7 +105,17 @@
               <h2><span class="section-icon">03</span>Alunos cadastrados</h2>
               <p class="muted">Edite cadastro, recalcule a ficha e troque exercicios do treino.</p>
             </div>
-            <span id="students-count" class="badge">0 alunos</span>
+            <div class="section-tools">
+              <label class="search-field" for="students-search">
+                <span class="sr-only">Pesquisar alunos</span>
+                <input
+                  id="students-search"
+                  type="search"
+                  placeholder="Pesquisar aluno por nome, email ou objetivo"
+                />
+              </label>
+              <span id="students-count" class="badge">0 alunos</span>
+            </div>
           </div>
           <div id="students-list" class="stack"></div>
         </article>
@@ -120,7 +126,17 @@
               <h2><span class="section-icon">04</span>Biblioteca de exercicios</h2>
               <p class="muted">Cadastre novos exercicios ou altere os existentes.</p>
             </div>
-            <span id="exercises-count" class="badge">0 exercicios</span>
+            <div class="section-tools">
+              <label class="search-field" for="exercises-search">
+                <span class="sr-only">Pesquisar exercicios</span>
+                <input
+                  id="exercises-search"
+                  type="search"
+                  placeholder="Pesquisar exercicio por nome, grupo ou equipamento"
+                />
+              </label>
+              <span id="exercises-count" class="badge">0 exercicios</span>
+            </div>
           </div>
           <div id="exercises-list" class="stack"></div>
         </article>
