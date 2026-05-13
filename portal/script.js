@@ -85,13 +85,16 @@ function populateGroups() {
   select.innerHTML = optionMarkup(groups, "peito");
 }
 
+const API_BASE_URL = "https://fatburn-backend.onrender.com";
+
 async function request(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
 
   const data = await response.json();
+
   if (!response.ok) {
     throw new Error(data.error ?? "Falha ao carregar dados");
   }
