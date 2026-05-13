@@ -90,7 +90,8 @@ textarea {
   width: 60px;
   height: 60px;
   border-radius: 18px;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fffaf5;
   box-shadow: 0 14px 24px rgba(39, 27, 18, 0.14);
 }
 
