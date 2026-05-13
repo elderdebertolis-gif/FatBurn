@@ -711,29 +711,6 @@ export default function App() {
     setSelectedWorkoutId(null);
   }
 
-  async function refreshCurrentUser() {
-    if (!bundle) {
-      await refreshServerHealth();
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const nextBundle = await fetchUserBundle(bundle.user.id);
-      await persistBundle(nextBundle);
-      setSessionError("");
-      setServerHealthy(true);
-    } catch (error) {
-      setNotice({
-        title: "Falha ao sincronizar",
-        message: (error as ApiError).message,
-        tone: "error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleSaveProfile() {
     if (!bundle) {
       return;
@@ -1821,9 +1798,6 @@ export default function App() {
               <Text style={styles.headerSubtitle}>{tabTitles[activeTab].subtitle}</Text>
             ) : null}
           </View>
-          <Pressable style={styles.headerAction} onPress={() => void refreshCurrentUser()}>
-            <Text style={styles.headerActionText}>{busy ? "..." : "Sincronizar"}</Text>
-          </Pressable>
         </View>
 
         {serverHealthy === false ? (

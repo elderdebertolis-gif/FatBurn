@@ -71,10 +71,10 @@ textarea {
 
 .topbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .brand-shell {
@@ -128,22 +128,6 @@ textarea {
   font-size: clamp(28px, 3vw, 36px);
 }
 
-.hero {
-  display: block;
-  margin-bottom: 18px;
-  padding: 28px;
-  border-radius: 30px;
-  background: var(--card);
-  border: 1px solid rgba(255, 106, 0, 0.12);
-  box-shadow: var(--shadow);
-}
-
-.hero-copy h2 {
-  margin-top: 10px;
-  font-size: clamp(30px, 4vw, 44px);
-  line-height: 1.02;
-}
-
 .hero-copy p,
 .muted,
 .item p,
@@ -154,21 +138,11 @@ textarea {
   color: var(--muted);
 }
 
-.hero-copy > p:last-of-type {
-  margin-top: 14px;
-  max-width: 64ch;
-  line-height: 1.6;
-}
-
 .hero-pills,
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-.hero-pills {
-  margin-top: 18px;
 }
 
 .hero-pill,

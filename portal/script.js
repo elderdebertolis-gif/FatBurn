@@ -57,7 +57,6 @@ const $ = (selector) => document.querySelector(selector);
 const state = {
   users: [],
   exercises: [],
-  health: null,
   studentQuery: "",
   exerciseQuery: "",
 };
@@ -129,20 +128,6 @@ async function request(path, options = {}) {
   }
 
   return data;
-}
-
-function renderHealth() {
-  const container = $("#server-status");
-  if (!state.health) {
-    container.innerHTML = "<p class='muted-dark'>Servidor ainda nao consultado.</p>";
-    return;
-  }
-
-  container.innerHTML = `
-    <h3>Servidor ativo</h3>
-    <p>Banco: ${escapeHtml(state.health.db)}</p>
-    <p>Exercicios pre-cadastrados: ${escapeHtml(state.health.seededExercises)}</p>
-  `;
 }
 
 function getCompatibleExercises(user, slot, currentExerciseId) {
@@ -503,17 +488,13 @@ function renderExercises() {
 }
 
 async function loadAll() {
-  const [health, usersPayload, exercisesPayload] = await Promise.all([
-    request("/api/health"),
+  const [usersPayload, exercisesPayload] = await Promise.all([
     request("/api/users"),
     request("/api/exercises"),
   ]);
-
-  state.health = health;
   state.users = usersPayload.users;
   state.exercises = exercisesPayload.exercises;
 
-  renderHealth();
   renderUsers();
   renderExercises();
 }
@@ -644,12 +625,6 @@ async function replaceWorkoutExercise(button) {
 
 populateGroups();
 
-$("#refresh-data").addEventListener("click", () => {
-  loadAll()
-    .then(() => showNotice("Dados sincronizados.", "success"))
-    .catch((error) => showNotice(error.message, "error"));
-});
-
 $("#refresh-exercises").addEventListener("click", () => {
   loadAll()
     .then(() => showNotice("Biblioteca recarregada.", "success"))
@@ -694,6 +669,5 @@ document.addEventListener("click", (event) => {
 });
 
 loadAll().catch((error) => {
-  $("#server-status").innerHTML = `<p class="muted-dark">${escapeHtml(error.message)}</p>`;
   showNotice(error.message, "error");
 });

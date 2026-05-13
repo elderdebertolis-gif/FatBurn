@@ -114,7 +114,7 @@ export const styles = StyleSheet.create({
   },
   appHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     alignItems: "flex-start",
     gap: 14,
     marginBottom: 2,
@@ -139,21 +139,6 @@ export const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: 6,
     fontFamily: "SpaceGrotesk_400Regular",
-  },
-  headerAction: {
-    minHeight: 44,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: COLOR.surface,
-    borderWidth: 1,
-    borderColor: COLOR.borderStrong,
-    justifyContent: "center",
-  },
-  headerActionText: {
-    color: COLOR.white,
-    fontSize: 13,
-    fontFamily: "SpaceGrotesk_700Bold",
   },
   heroCard: {
     backgroundColor: COLOR.surface,
