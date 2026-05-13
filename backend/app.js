@@ -25,7 +25,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const portalDir = normalize(join(__dirname, "..", "portal"));
-const port = 3030;
+const port = Number(process.env.PORT) || 3030;
+const host = "0.0.0.0";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -506,6 +507,6 @@ createServer(async (request, response) => {
       detail: error instanceof Error ? error.message : String(error),
     });
   }
-}).listen(port, () => {
-  console.log(`FatBurn API e portal web disponiveis em http://localhost:${port}`);
+}).listen(port, host, () => {
+  console.log(`FatBurn API disponivel em http://${host}:${port}`);
 });
