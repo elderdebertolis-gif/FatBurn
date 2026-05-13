@@ -85,6 +85,14 @@ textarea {
   gap: 14px;
 }
 
+.brand-logo-horizontal {
+  width: min(320px, 52vw);
+  height: 84px;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+}
+
 .brand-icon,
 .hero-logo {
   width: 60px;
@@ -430,8 +438,9 @@ button.secondary {
     display: grid;
   }
 
-  .brand-shell {
-    align-items: flex-start;
+  .brand-logo-horizontal {
+    width: min(240px, 62vw);
+    height: 68px;
   }
 
   .form-grid {
