@@ -8,7 +8,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/space-grotesk";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -34,7 +34,6 @@ import {
   checkServerHealth,
   fetchUserBundle,
   loginUser,
-  recalculateWorkout,
   registerUser,
   replaceWorkoutExercise,
   restartWorkout,
@@ -90,7 +89,7 @@ const ENVIRONMENT_OPTIONS = [
 const TRAINING_DAYS_OPTIONS = ["2", "3", "4", "5", "6"] as const;
 
 const BRAND_LOGO_HORIZONTAL = require("./assets/branding/logo-horizontal-dark.png");
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 const ANDROID_TOP_OFFSET = Platform.OS === "android" ? NativeStatusBar.currentHeight ?? 0 : 0;
 const TAB_BAR_OFFSET = Platform.OS === "android" ? 18 : 12;
 
@@ -580,7 +579,10 @@ export default function App() {
   const [videoContext, setVideoContext] = useState<VideoContext>(null);
   const [setDrafts, setSetDrafts] = useState<SetDraftMap>({});
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
+  const authScrollRef = useRef<ScrollView | null>(null);
+  const appScrollRef = useRef<ScrollView | null>(null);
 
   useEffect(() => {
     void runConnectionGate();
@@ -593,10 +595,27 @@ export default function App() {
     setProfileForm(buildFormFromUser(bundle.user));
     setWeightInput(String(bundle.user.weightKg));
     setSetDrafts({});
+    setProfileEditorOpen(false);
     setSelectedWorkoutId((current) =>
       current && bundle.user.workoutPlan?.some((workout) => workout.id === current) ? current : null
     );
   }, [bundle]);
+
+  useEffect(() => {
+    const timer = requestAnimationFrame(() => {
+      authScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+    });
+
+    return () => cancelAnimationFrame(timer);
+  }, [authMode]);
+
+  useEffect(() => {
+    const timer = requestAnimationFrame(() => {
+      appScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+    });
+
+    return () => cancelAnimationFrame(timer);
+  }, [activeTab, selectedWorkoutId]);
 
   async function refreshServerHealth(): Promise<boolean> {
     try {
@@ -727,6 +746,7 @@ export default function App() {
       const nextBundle = await updateUserProfile(bundle.user.id, formToPayload(profileForm));
       await persistBundle(nextBundle);
       setSessionError("");
+      setProfileEditorOpen(false);
       setNotice({
         title: "Perfil atualizado",
         message: "Cadastro salvo e treino recalculado.",
@@ -735,31 +755,6 @@ export default function App() {
     } catch (error) {
       setNotice({
         title: "Erro ao salvar",
-        message: (error as ApiError).message,
-        tone: "error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRecalculateWorkout() {
-    if (!bundle) {
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const nextBundle = await recalculateWorkout(bundle.user.id);
-      await persistBundle(nextBundle);
-      setNotice({
-        title: "Treino atualizado",
-        message: "A divisao foi refeita com base no perfil atual.",
-        tone: "success",
-      });
-    } catch (error) {
-      setNotice({
-        title: "Erro ao recalcular",
         message: (error as ApiError).message,
         tone: "error",
       });
@@ -1004,6 +999,36 @@ export default function App() {
     setProfileForm((current) => ({ ...current, [field]: value }));
   }
 
+  function renderNoticeModal() {
+    return (
+      <Modal
+        animationType="fade"
+        transparent
+        visible={notice !== null}
+        onRequestClose={() => setNotice(null)}
+      >
+        <View style={styles.dialogOverlay}>
+          <View
+            style={[
+              styles.dialogCard,
+              notice?.tone === "error"
+                ? styles.dialogCardError
+                : notice?.tone === "success"
+                  ? styles.dialogCardSuccess
+                  : null,
+            ]}
+          >
+            <Text style={styles.dialogTitle}>{notice?.title ?? ""}</Text>
+            <Text style={styles.dialogText}>{notice?.message ?? ""}</Text>
+            <View style={styles.dialogActions}>
+              <ActionButton label="Entendi" onPress={() => setNotice(null)} compact />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
   if (!fontsLoaded || booting) {
     return (
       <SafeAreaView style={[styles.loadingScreen, { paddingTop: ANDROID_TOP_OFFSET }]}>
@@ -1038,6 +1063,7 @@ export default function App() {
               />
             </View>
           </View>
+          {renderNoticeModal()}
         </View>
       </SafeAreaView>
     );
@@ -1047,7 +1073,7 @@ export default function App() {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
         <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
-        <ScrollView contentContainerStyle={styles.authScreen}>
+        <ScrollView ref={authScrollRef} contentContainerStyle={styles.authScreen}>
           <View style={styles.authHeroPanel}>
             <BrandWordmark centered />
           </View>
@@ -1079,7 +1105,7 @@ export default function App() {
                   secureTextEntry
                   onChangeText={setLoginPassword}
                 />
-                <View style={styles.buttonRow}>
+                <View style={[styles.buttonRow, styles.buttonRowCentered]}>
                   <ActionButton label="Entrar" onPress={() => void handleLogin()} disabled={busy} />
                 </View>
                 <Pressable style={styles.authSwitch} onPress={() => setAuthMode("register")}>
@@ -1089,7 +1115,7 @@ export default function App() {
             ) : (
               <>
                 <UserFormFields form={registerForm} onChange={updateRegisterForm} />
-                <View style={styles.buttonRow}>
+                <View style={[styles.buttonRow, styles.buttonRowCentered]}>
                   <ActionButton
                     label="Cadastrar e montar treino"
                     onPress={() => void handleRegister()}
@@ -1103,6 +1129,7 @@ export default function App() {
             )}
           </View>
         </ScrollView>
+        {renderNoticeModal()}
       </SafeAreaView>
     );
   }
@@ -1187,12 +1214,12 @@ export default function App() {
             </View>
           </View>
           <Text style={styles.heroText}>
-            {user.name}, seu plano atual combina {user.trainingDaysPerWeek} treinos por semana, IMC{" "}
-            {user.bmi.toFixed(1)} ({user.bmiClass}) e uma biblioteca filtrada para{" "}
-            {getEnvironmentLabel(user.trainingEnvironment).toLowerCase()}.
+            {user.name}, seu plano atual tem {user.trainingDaysPerWeek} treinos por semana na{" "}
+            {getEnvironmentLabel(user.trainingEnvironment).toLowerCase()}, com IMC atual de{" "}
+            {user.bmi.toFixed(1)} ({user.bmiClass}) e meta em {user.targetWeightKg.toFixed(1)} kg.
           </Text>
           <View style={styles.heroMetricRow}>
-            <MetricChip label={getObjectiveLabel(user.objective)} icon="target" />
+            <MetricChip label={`${user.trainingDaysPerWeek}x por semana`} icon="calendar-week" />
             <MetricChip label={`${todayCalories} kcal hoje`} icon="fire" />
           </View>
         </View>
@@ -1227,25 +1254,17 @@ export default function App() {
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Base usada para montar o treino</Text>
-          <Text style={styles.cardBody}>
-            {
-              exercises.filter(
-                (exercise) => exercise.environment === user.trainingEnvironment
-              ).length
-            }{" "}
-            exercicios pre-cadastrados disponiveis para{" "}
-            {getEnvironmentLabel(user.trainingEnvironment).toLowerCase()}.
-          </Text>
-          <Text style={styles.infoNote}>
-            Cada treino usa 3 exercicios de cada grupo muscular principal e 1 aerobico, sempre
-            puxando opcoes da base compartilhada com o portal do instrutor.
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sua divisao atual</Text>
+        <Pressable
+          style={styles.card}
+          onPress={() => {
+            setSelectedWorkoutId(null);
+            setActiveTab("workouts");
+          }}
+        >
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.cardTitle}>Sua divisao atual</Text>
+            <Text style={styles.inlineActionText}>Abrir treinos</Text>
+          </View>
           {workoutPlan.map((workout) => (
             <View key={workout.id} style={styles.labelValue}>
               <Text style={styles.labelValueLabel}>
@@ -1254,7 +1273,7 @@ export default function App() {
               <Text style={styles.labelValueValue}>{workout.exercises.length} exercicios</Text>
             </View>
           ))}
-        </View>
+        </Pressable>
       </>
     );
   }
@@ -1351,7 +1370,6 @@ export default function App() {
             <View style={styles.workoutHeaderLeft}>
               <Text style={styles.workoutLabel}>Treino {selectedWorkout.label}</Text>
               <Text style={styles.workoutTitle}>{selectedWorkout.name}</Text>
-              <Text style={styles.workoutFocus}>{selectedWorkout.focus}</Text>
             </View>
             <View
               style={[
@@ -1388,30 +1406,11 @@ export default function App() {
               )
             )}
           </View>
-
-          <Text style={styles.workoutGuidance}>{selectedWorkout.guidance}</Text>
-
           {selectedWorkoutStatus?.status === "pendente" ? (
-            <Text style={styles.infoNote}>
-              Esse treino ainda nao esta liberado. Finalize primeiro o treino{" "}
-              {currentWorkoutLabel ?? "atual"} para avancar a semana.
+            <Text style={styles.workoutHint}>
+              Disponivel apos concluir o treino {currentWorkoutLabel ?? "atual"}.
             </Text>
-          ) : selectedWorkoutStatus?.status === "concluido" ? (
-            <Text style={styles.infoNote}>
-              Esse treino ja foi concluido nesta semana. Toque em Reiniciar treino para refazer a
-              sessao de hoje.
-            </Text>
-          ) : canStartWorkout ? (
-            <Text style={styles.infoNote}>
-              Toque em Iniciar treino para liberar videos, trocas de exercicio e marcacao das
-              series.
-            </Text>
-          ) : (
-            <Text style={styles.infoNote}>
-              Treino iniciado. Marque o que foi realizado e finalize quando quiser encerrar a
-              sessao, mesmo que nem todos os exercicios tenham sido concluidos.
-            </Text>
-          )}
+          ) : null}
 
           <View style={styles.buttonRow}>
             {canStartWorkout ? (
@@ -1728,21 +1727,36 @@ export default function App() {
         </View>
 
         <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Editar cadastro</Text>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionHeaderBlock}>
+              <Text style={styles.sectionTitle}>Cadastro</Text>
+              <Text style={styles.sectionSubtitle}>
+                {profileEditorOpen
+                  ? "Atualize seus dados e salve para refazer seu treino automaticamente."
+                  : "Toque em editar para alterar seus dados quando precisar."}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.inlineAction}
+              onPress={() => setProfileEditorOpen((current) => !current)}
+            >
+              <Text style={styles.inlineActionText}>
+                {profileEditorOpen ? "Fechar" : "Editar"}
+              </Text>
+            </Pressable>
           </View>
 
-          <UserFormFields form={profileForm} onChange={updateProfileForm} />
+          {profileEditorOpen ? <UserFormFields form={profileForm} onChange={updateProfileForm} /> : null}
 
-          <View style={styles.buttonRow}>
-            <ActionButton label="Salvar perfil" onPress={() => void handleSaveProfile()} disabled={busy} />
-            <ActionButton
-              label="Recalcular treino"
-              onPress={() => void handleRecalculateWorkout()}
-              secondary
-              disabled={busy}
-            />
-          </View>
+          {profileEditorOpen ? (
+            <View style={styles.buttonRow}>
+              <ActionButton
+                label="Salvar perfil"
+                onPress={() => void handleSaveProfile()}
+                disabled={busy}
+              />
+            </View>
+          ) : null}
           <View style={styles.buttonRow}>
             <ActionButton label="Sair da conta" onPress={() => void handleLogout()} secondary disabled={busy} />
           </View>
@@ -1789,7 +1803,7 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
       <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={appScrollRef} contentContainerStyle={styles.content}>
         <View style={styles.appHeader}>
           <View style={{ flex: 1 }}>
             <BrandWordmark compact />
@@ -1954,31 +1968,7 @@ export default function App() {
         </View>
       </Modal>
 
-      <Modal
-        animationType="fade"
-        transparent
-        visible={notice !== null}
-        onRequestClose={() => setNotice(null)}
-      >
-        <View style={styles.dialogOverlay}>
-          <View
-            style={[
-              styles.dialogCard,
-              notice?.tone === "error"
-                ? styles.dialogCardError
-                : notice?.tone === "success"
-                  ? styles.dialogCardSuccess
-                  : null,
-            ]}
-          >
-            <Text style={styles.dialogTitle}>{notice?.title ?? ""}</Text>
-            <Text style={styles.dialogText}>{notice?.message ?? ""}</Text>
-            <View style={styles.dialogActions}>
-              <ActionButton label="Entendi" onPress={() => setNotice(null)} compact />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {renderNoticeModal()}
     </SafeAreaView>
   );
 }

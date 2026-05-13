@@ -265,6 +265,16 @@ export const styles = StyleSheet.create({
   sectionHeader: {
     marginBottom: 14,
   },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 14,
+  },
+  sectionHeaderBlock: {
+    flex: 1,
+  },
   sectionTitle: {
     fontSize: 22,
     lineHeight: 26,
@@ -276,6 +286,24 @@ export const styles = StyleSheet.create({
     color: COLOR.muted,
     lineHeight: 21,
     fontFamily: "SpaceGrotesk_400Regular",
+  },
+  inlineAction: {
+    minHeight: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLOR.borderStrong,
+    backgroundColor: COLOR.surfaceRaised,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  inlineActionText: {
+    color: COLOR.orange,
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    fontFamily: "SpaceGrotesk_700Bold",
   },
   cardTitle: {
     fontSize: 19,
@@ -351,6 +379,9 @@ export const styles = StyleSheet.create({
     gap: 10,
     flexWrap: "wrap",
     marginTop: 8,
+  },
+  buttonRowCentered: {
+    justifyContent: "center",
   },
   button: {
     minHeight: 48,
@@ -478,6 +509,12 @@ export const styles = StyleSheet.create({
     lineHeight: 21,
     fontFamily: "SpaceGrotesk_400Regular",
   },
+  workoutHint: {
+    color: COLOR.muted,
+    marginTop: 12,
+    lineHeight: 20,
+    fontFamily: "SpaceGrotesk_400Regular",
+  },
   workoutSummaryText: {
     color: COLOR.muted,
     lineHeight: 20,
@@ -553,8 +590,8 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   exerciseItemDone: {
-    borderColor: "rgba(255,106,0,0.36)",
-    backgroundColor: "rgba(255,106,0,0.05)",
+    borderColor: "rgba(52, 199, 89, 0.42)",
+    backgroundColor: "rgba(52, 199, 89, 0.12)",
   },
   exerciseItemPartial: {
     borderColor: COLOR.borderStrong,
