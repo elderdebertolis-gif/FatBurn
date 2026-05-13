@@ -291,6 +291,16 @@ textarea {
   padding: 12px 14px;
 }
 
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
 textarea {
   resize: vertical;
 }
