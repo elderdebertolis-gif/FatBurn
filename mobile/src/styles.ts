@@ -56,12 +56,6 @@ export const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 3,
   },
-  authAccentLine: {
-    width: 46,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: COLOR.orange,
-  },
   authBrandTitle: {
     color: COLOR.white,
     fontSize: 30,

@@ -1044,7 +1044,6 @@ export default function App() {
         <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
         <View style={styles.authScreen}>
           <View style={styles.authHeroPanel}>
-            <View style={styles.authAccentLine} />
             <BrandWordmark centered />
           </View>
 
@@ -1073,7 +1072,6 @@ export default function App() {
         <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
         <ScrollView contentContainerStyle={styles.authScreen}>
           <View style={styles.authHeroPanel}>
-            <View style={styles.authAccentLine} />
             <BrandWordmark centered />
           </View>
 
