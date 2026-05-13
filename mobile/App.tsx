@@ -1030,7 +1030,7 @@ export default function App() {
   if (!fontsLoaded || booting) {
     return (
       <SafeAreaView style={[styles.loadingScreen, { paddingTop: ANDROID_TOP_OFFSET }]}>
-        <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
+        <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
         <BrandWordmark centered />
         <ActivityIndicator size="large" color="#ff6a00" />
         <Text style={styles.loadingText}>Conectando seu plano.</Text>
@@ -1041,7 +1041,7 @@ export default function App() {
   if (!bundle && serverHealthy === false) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
-        <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
+        <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
         <View style={styles.authScreen}>
           <View style={styles.authHeroPanel}>
             <View style={styles.authAccentLine} />
@@ -1070,7 +1070,7 @@ export default function App() {
   if (!bundle) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
-        <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
+        <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
         <ScrollView contentContainerStyle={styles.authScreen}>
           <View style={styles.authHeroPanel}>
             <View style={styles.authAccentLine} />
@@ -1813,7 +1813,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
-      <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
+      <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.appHeader}>
           <View style={{ flex: 1 }}>

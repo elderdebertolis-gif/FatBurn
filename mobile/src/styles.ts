@@ -5,15 +5,15 @@ const COLOR = {
   orangeHot: "#FF3B00",
   orangeSoft: "#FF6A00",
   black: "#1A1A1A",
-  surface: "#FFFFFF",
-  surfaceAlt: "#F2F2F2",
-  surfaceRaised: "#F2F2F2",
-  border: "rgba(26, 26, 26, 0.08)",
-  borderStrong: "rgba(26, 26, 26, 0.16)",
+  surface: "#1A1A1A",
+  surfaceAlt: "#1A1A1A",
+  surfaceRaised: "rgba(255, 255, 255, 0.04)",
+  border: "rgba(255, 255, 255, 0.08)",
+  borderStrong: "rgba(255, 255, 255, 0.16)",
   white: "#FFFFFF",
-  offWhite: "#F2F2F2",
-  muted: "rgba(26, 26, 26, 0.64)",
-  mutedSoft: "rgba(26, 26, 26, 0.48)",
+  offWhite: "#1A1A1A",
+  muted: "rgba(242, 242, 242, 0.72)",
+  mutedSoft: "rgba(242, 242, 242, 0.52)",
 };
 
 export const styles = StyleSheet.create({
@@ -50,7 +50,7 @@ export const styles = StyleSheet.create({
     borderColor: "rgba(255,106,0,0.12)",
     padding: 20,
     gap: 12,
-    shadowColor: "rgba(26,26,26,0.18)",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 18,
@@ -133,7 +133,7 @@ export const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   headerTitle: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 28,
     lineHeight: 34,
     marginTop: 8,
@@ -157,7 +157,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerActionText: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 13,
     fontFamily: "SpaceGrotesk_700Bold",
   },
@@ -196,7 +196,7 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.border,
   },
   heroFocusText: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -211,7 +211,7 @@ export const styles = StyleSheet.create({
   },
   heroTitle: {
     marginTop: 18,
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 32,
     lineHeight: 36,
     fontFamily: "SpaceGrotesk_700Bold",
@@ -241,7 +241,7 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.border,
   },
   metricChipText: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.7,
@@ -270,7 +270,7 @@ export const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
   },
   highlightTitle: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 24,
     lineHeight: 28,
     marginTop: 7,
@@ -289,7 +289,7 @@ export const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     lineHeight: 26,
-    color: COLOR.black,
+    color: COLOR.white,
     fontFamily: "SpaceGrotesk_700Bold",
   },
   sectionSubtitle: {
@@ -301,7 +301,7 @@ export const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 19,
     lineHeight: 23,
-    color: COLOR.black,
+    color: COLOR.white,
     fontFamily: "SpaceGrotesk_700Bold",
   },
   cardMiniTitle: {
@@ -321,7 +321,7 @@ export const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 13,
-    color: COLOR.black,
+    color: COLOR.white,
     marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -333,8 +333,8 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: COLOR.white,
-    color: COLOR.black,
+    backgroundColor: COLOR.surfaceRaised,
+    color: COLOR.white,
     fontSize: 15,
     fontFamily: "SpaceGrotesk_400Regular",
   },
@@ -353,7 +353,7 @@ export const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLOR.border,
-    backgroundColor: COLOR.white,
+    backgroundColor: COLOR.surfaceRaised,
   },
   pillActive: {
     borderColor: COLOR.orange,
@@ -414,7 +414,7 @@ export const styles = StyleSheet.create({
     color: COLOR.white,
   },
   buttonSecondaryText: {
-    color: COLOR.black,
+    color: COLOR.white,
   },
   metricsRow: {
     flexDirection: "row",
@@ -436,7 +436,7 @@ export const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
   },
   metricValue: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 26,
     lineHeight: 30,
     marginTop: 8,
@@ -463,7 +463,7 @@ export const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: COLOR.border,
-    backgroundColor: COLOR.white,
+    backgroundColor: COLOR.surface,
     padding: 16,
     gap: 8,
   },
@@ -481,7 +481,7 @@ export const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
   },
   workoutTitle: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 20,
     lineHeight: 24,
     marginTop: 5,
@@ -521,11 +521,11 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.borderStrong,
   },
   statusBadgeDone: {
-    backgroundColor: COLOR.surfaceAlt,
-    borderColor: COLOR.border,
+    backgroundColor: COLOR.surfaceRaised,
+    borderColor: COLOR.borderStrong,
   },
   statusBadgeText: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 11,
     textAlign: "center",
     textTransform: "uppercase",
@@ -536,7 +536,7 @@ export const styles = StyleSheet.create({
     color: COLOR.white,
   },
   statusBadgeTextDone: {
-    color: COLOR.black,
+    color: COLOR.white,
   },
   backLink: {
     alignSelf: "flex-start",
@@ -568,7 +568,7 @@ export const styles = StyleSheet.create({
     marginTop: 14,
     padding: 14,
     borderRadius: 20,
-    backgroundColor: COLOR.white,
+    backgroundColor: COLOR.surface,
     borderWidth: 1,
     borderColor: COLOR.border,
     gap: 12,
@@ -579,7 +579,7 @@ export const styles = StyleSheet.create({
   },
   exerciseItemPartial: {
     borderColor: COLOR.borderStrong,
-    backgroundColor: COLOR.surfaceAlt,
+    backgroundColor: COLOR.surfaceRaised,
   },
   exerciseItemLocked: {
     opacity: 0.8,
@@ -594,7 +594,7 @@ export const styles = StyleSheet.create({
   },
   exerciseName: {
     fontSize: 17,
-    color: COLOR.black,
+    color: COLOR.white,
     fontFamily: "SpaceGrotesk_700Bold",
   },
   exerciseMeta: {
@@ -655,7 +655,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(26, 26, 26, 0.08)",
+    borderTopColor: "rgba(255, 255, 255, 0.08)",
     gap: 8,
   },
   seriesRowDone: {
@@ -680,7 +680,7 @@ export const styles = StyleSheet.create({
   seriesValue: {
     flex: 1,
     textAlign: "center",
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 14,
     fontFamily: "SpaceGrotesk_500Medium",
   },
@@ -697,8 +697,8 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLOR.borderStrong,
     borderRadius: 12,
-    backgroundColor: COLOR.white,
-    color: COLOR.black,
+    backgroundColor: COLOR.surfaceRaised,
+    color: COLOR.white,
     fontSize: 14,
     paddingHorizontal: 10,
     textAlign: "center",
@@ -710,7 +710,7 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLOR.borderStrong,
-    backgroundColor: COLOR.white,
+    backgroundColor: COLOR.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -741,7 +741,7 @@ export const styles = StyleSheet.create({
   goalHeadline: {
     fontSize: 26,
     lineHeight: 30,
-    color: COLOR.black,
+    color: COLOR.white,
     marginTop: 10,
     fontFamily: "SpaceGrotesk_700Bold",
   },
@@ -772,7 +772,7 @@ export const styles = StyleSheet.create({
     marginBottom: 6,
   },
   chartLabel: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontFamily: "SpaceGrotesk_500Medium",
   },
   chartValue: {
@@ -796,10 +796,10 @@ export const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(26, 26, 26, 0.08)",
+    borderBottomColor: "rgba(255, 255, 255, 0.08)",
   },
   labelValueLabel: {
-    color: COLOR.black,
+    color: COLOR.white,
     flex: 1,
     fontFamily: "SpaceGrotesk_500Medium",
   },
@@ -835,7 +835,7 @@ export const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 17,
-    color: COLOR.black,
+    color: COLOR.white,
     fontFamily: "SpaceGrotesk_700Bold",
   },
   userMeta: {
@@ -857,13 +857,13 @@ export const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(26, 26, 26, 0.08)",
+    borderBottomColor: "rgba(255, 255, 255, 0.08)",
   },
   libraryInfo: {
     flex: 1,
   },
   libraryTitle: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 15,
     fontFamily: "SpaceGrotesk_700Bold",
   },
@@ -883,14 +883,14 @@ export const styles = StyleSheet.create({
     right: 12,
     bottom: 12,
     borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    backgroundColor: "rgba(26,26,26,0.96)",
     padding: 8,
     borderWidth: 1,
     borderColor: "rgba(255,106,0,0.18)",
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
-    shadowColor: "rgba(26,26,26,0.16)",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 18,
@@ -940,7 +940,7 @@ export const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     lineHeight: 26,
-    color: COLOR.black,
+    color: COLOR.white,
     fontFamily: "SpaceGrotesk_700Bold",
   },
   modalSubtitle: {
@@ -962,7 +962,7 @@ export const styles = StyleSheet.create({
     backgroundColor: COLOR.surfaceAlt,
   },
   replacementTitle: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 15,
     fontFamily: "SpaceGrotesk_700Bold",
   },
@@ -1003,10 +1003,10 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.borderStrong,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: COLOR.surface,
+    backgroundColor: COLOR.surfaceRaised,
   },
   videoScreenCloseText: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 13,
     fontFamily: "SpaceGrotesk_700Bold",
   },
@@ -1051,7 +1051,7 @@ export const styles = StyleSheet.create({
     borderColor: "rgba(255,106,0,0.18)",
   },
   dialogTitle: {
-    color: COLOR.black,
+    color: COLOR.white,
     fontSize: 22,
     lineHeight: 26,
     fontFamily: "SpaceGrotesk_700Bold",

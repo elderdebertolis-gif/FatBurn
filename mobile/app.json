@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/branding/logo-horizontal-dark.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F2F2F2"
+      "backgroundColor": "#1A1A1A"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -23,7 +23,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/branding/adaptive-foreground.png",
         "monochromeImage": "./assets/branding/adaptive-monochrome.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#1A1A1A"
       }
     },
     "web": {
