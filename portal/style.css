@@ -1,18 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap");
 
 :root {
-  --bg: #f7f2ec;
-  --card: #ffffff;
-  --card-soft: #fffaf5;
-  --text: #171311;
-  --muted: #766b63;
-  --muted-soft: #a08f83;
-  --accent: #ff6a00;
-  --accent-hot: #ff3b00;
-  --accent-soft: #fff2e7;
-  --line: rgba(32, 24, 18, 0.08);
-  --line-strong: rgba(32, 24, 18, 0.16);
-  --shadow: 0 18px 38px rgba(87, 57, 33, 0.08);
+  --bg: #F2F2F2;
+  --card: #FFFFFF;
+  --card-soft: #F2F2F2;
+  --text: #1A1A1A;
+  --muted: rgba(26, 26, 26, 0.64);
+  --muted-soft: rgba(26, 26, 26, 0.48);
+  --accent: #FF6A00;
+  --accent-hot: #FF3B00;
+  --accent-soft: #F2F2F2;
+  --line: rgba(26, 26, 26, 0.08);
+  --line-strong: rgba(26, 26, 26, 0.16);
+  --shadow: 0 14px 28px rgba(26, 26, 26, 0.08);
 }
 
 * {
@@ -27,9 +27,7 @@ body {
 
 body {
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(255, 106, 0, 0.06), transparent 24%),
-    linear-gradient(180deg, #fffdf9 0%, var(--bg) 42%, #f3ece4 100%);
+  background: var(--bg);
   color: var(--text);
 }
 
@@ -101,7 +99,7 @@ textarea {
   object-fit: contain;
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 10px 18px rgba(39, 27, 18, 0.08);
+  box-shadow: 0 10px 18px rgba(26, 26, 26, 0.08);
 }
 
 .hero-logo {
@@ -138,7 +136,7 @@ textarea {
   padding: 28px;
   border-radius: 30px;
   background: var(--card);
-  border: 1px solid rgba(255, 106, 0, 0.12);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
 
@@ -180,7 +178,7 @@ textarea {
   border-radius: 999px;
   padding: 10px 14px;
   background: var(--accent-soft);
-  border: 1px solid rgba(255, 106, 0, 0.14);
+  border: 1px solid var(--line);
   color: var(--text);
   font-size: 12px;
   font-weight: 700;
@@ -195,8 +193,8 @@ textarea {
   gap: 12px;
   padding: 20px;
   border-radius: 24px;
-  background: linear-gradient(180deg, #fffaf5, #fff2e7);
-  border: 1px solid rgba(255, 106, 0, 0.12);
+  background: var(--card-soft);
+  border: 1px solid var(--line);
   color: var(--text);
 }
 
@@ -254,8 +252,8 @@ textarea {
 
 .badge {
   border-radius: 999px;
-  background: var(--accent-soft);
-  border: 1px solid rgba(255, 106, 0, 0.14);
+  background: var(--card-soft);
+  border: 1px solid var(--line);
   color: var(--accent);
   padding: 8px 12px;
   font-size: 13px;
@@ -288,7 +286,7 @@ textarea {
   width: 100%;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: var(--card-soft);
+  background: var(--card);
   color: var(--text);
   padding: 12px 14px;
 }

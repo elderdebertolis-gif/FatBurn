@@ -7,9 +7,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/branding/app-icon.png",
+      "image": "./assets/branding/logo-horizontal-dark.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f7f2ec"
+      "backgroundColor": "#F2F2F2"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -23,7 +23,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/branding/adaptive-foreground.png",
         "monochromeImage": "./assets/branding/adaptive-monochrome.png",
-        "backgroundColor": "#050505"
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {

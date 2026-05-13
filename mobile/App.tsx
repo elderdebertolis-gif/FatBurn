@@ -89,7 +89,7 @@ const ENVIRONMENT_OPTIONS = [
 
 const TRAINING_DAYS_OPTIONS = ["2", "3", "4", "5", "6"] as const;
 
-const BRAND_ICON = require("./assets/branding/app-icon.png");
+const BRAND_LOGO_HORIZONTAL = require("./assets/branding/logo-horizontal-dark.png");
 const APP_VERSION = "1.0.0";
 const ANDROID_TOP_OFFSET = Platform.OS === "android" ? NativeStatusBar.currentHeight ?? 0 : 0;
 const TAB_BAR_OFFSET = Platform.OS === "android" ? 18 : 12;
@@ -277,25 +277,15 @@ function BrandWordmark({
   centered?: boolean;
 }) {
   return (
-    <View
+    <Image
+      source={BRAND_LOGO_HORIZONTAL}
+      resizeMode="contain"
       style={[
-        styles.brandLockup,
-        compact ? styles.brandLockupCompact : null,
-        centered ? styles.brandLockupCentered : null,
+        styles.brandHorizontal,
+        compact ? styles.brandHorizontalCompact : null,
+        centered ? styles.brandHorizontalCentered : null,
       ]}
-    >
-      <Image
-        source={BRAND_ICON}
-        resizeMode="contain"
-        style={compact ? styles.brandIconCompact : styles.brandIconLarge}
-      />
-      <View style={styles.brandWordColumn}>
-        <View style={styles.brandWordRow}>
-          <Text style={[styles.brandWordFat, compact ? styles.brandWordCompact : null]}>Fat</Text>
-          <Text style={[styles.brandWordBurn, compact ? styles.brandWordCompact : null]}>Burn</Text>
-        </View>
-      </View>
-    </View>
+    />
   );
 }
 
@@ -1040,7 +1030,7 @@ export default function App() {
   if (!fontsLoaded || booting) {
     return (
       <SafeAreaView style={[styles.loadingScreen, { paddingTop: ANDROID_TOP_OFFSET }]}>
-        <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
+        <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
         <BrandWordmark centered />
         <ActivityIndicator size="large" color="#ff6a00" />
         <Text style={styles.loadingText}>Conectando seu plano.</Text>
@@ -1051,7 +1041,7 @@ export default function App() {
   if (!bundle && serverHealthy === false) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
-        <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
+        <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
         <View style={styles.authScreen}>
           <View style={styles.authHeroPanel}>
             <View style={styles.authAccentLine} />
@@ -1080,7 +1070,7 @@ export default function App() {
   if (!bundle) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
-        <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
+        <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
         <ScrollView contentContainerStyle={styles.authScreen}>
           <View style={styles.authHeroPanel}>
             <View style={styles.authAccentLine} />
@@ -1215,16 +1205,15 @@ export default function App() {
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroBrandBadge}>
-              <Text style={styles.heroEyebrow}>FatBurn Active Plan</Text>
+              <Text style={styles.heroEyebrow}>{getObjectiveLabel(user.objective)}</Text>
             </View>
             <View style={styles.heroFocusPill}>
               <Text style={styles.heroFocusText}>{getEnvironmentLabel(user.trainingEnvironment)}</Text>
             </View>
           </View>
-          <Text style={styles.heroTitle}>Stronger you. Leaner you. Everyday.</Text>
           <Text style={styles.heroText}>
-            {user.name}, seu plano combina {user.trainingDaysPerWeek} treinos por semana, IMC{" "}
-            {user.bmi} ({user.bmiClass}) e uma biblioteca filtrada para{" "}
+            {user.name}, seu plano atual combina {user.trainingDaysPerWeek} treinos por semana, IMC{" "}
+            {user.bmi.toFixed(1)} ({user.bmiClass}) e uma biblioteca filtrada para{" "}
             {getEnvironmentLabel(user.trainingEnvironment).toLowerCase()}.
           </Text>
           <View style={styles.heroMetricRow}>
@@ -1824,7 +1813,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
-      <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
+      <StatusBar style="dark" translucent={false} backgroundColor="#F2F2F2" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.appHeader}>
           <View style={{ flex: 1 }}>

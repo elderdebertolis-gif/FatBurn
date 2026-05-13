@@ -1,19 +1,19 @@
 import { StyleSheet } from "react-native";
 
 const COLOR = {
-  orange: "#ff6a00",
-  orangeHot: "#ff3b00",
-  orangeSoft: "#ffb26a",
-  black: "#171311",
-  surface: "#ffffff",
-  surfaceAlt: "#fffaf5",
-  surfaceRaised: "#fff2e7",
-  border: "rgba(32, 24, 18, 0.08)",
-  borderStrong: "rgba(32, 24, 18, 0.16)",
-  white: "#ffffff",
-  offWhite: "#f7f2ec",
-  muted: "#766b63",
-  mutedSoft: "#9f9085",
+  orange: "#FF6A00",
+  orangeHot: "#FF3B00",
+  orangeSoft: "#FF6A00",
+  black: "#1A1A1A",
+  surface: "#FFFFFF",
+  surfaceAlt: "#F2F2F2",
+  surfaceRaised: "#F2F2F2",
+  border: "rgba(26, 26, 26, 0.08)",
+  borderStrong: "rgba(26, 26, 26, 0.16)",
+  white: "#FFFFFF",
+  offWhite: "#F2F2F2",
+  muted: "rgba(26, 26, 26, 0.64)",
+  mutedSoft: "rgba(26, 26, 26, 0.48)",
 };
 
 export const styles = StyleSheet.create({
@@ -47,14 +47,14 @@ export const styles = StyleSheet.create({
     backgroundColor: COLOR.surface,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,106,0,0.18)",
+    borderColor: "rgba(255,106,0,0.12)",
     padding: 20,
     gap: 12,
-    shadowColor: "#ff5a00",
-    shadowOffset: { width: 0, height: 10 },
+    shadowColor: "rgba(26,26,26,0.18)",
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
-    shadowRadius: 22,
-    elevation: 4,
+    shadowRadius: 18,
+    elevation: 3,
   },
   authAccentLine: {
     width: 46,
@@ -96,50 +96,16 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "SpaceGrotesk_700Bold",
   },
-  brandLockup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  brandHorizontal: {
+    width: 238,
+    height: 74,
   },
-  brandLockupCompact: {
-    gap: 10,
+  brandHorizontalCompact: {
+    width: 172,
+    height: 44,
   },
-  brandLockupCentered: {
-    justifyContent: "center",
+  brandHorizontalCentered: {
     alignSelf: "center",
-  },
-  brandIconLarge: {
-    width: 88,
-    height: 88,
-    borderRadius: 22,
-  },
-  brandIconCompact: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-  },
-  brandWordColumn: {
-    justifyContent: "center",
-  },
-  brandWordRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-  },
-  brandWordFat: {
-    color: COLOR.black,
-    fontSize: 34,
-    lineHeight: 38,
-    fontFamily: "SpaceGrotesk_700Bold",
-  },
-  brandWordBurn: {
-    color: COLOR.orange,
-    fontSize: 34,
-    lineHeight: 38,
-    fontFamily: "SpaceGrotesk_700Bold",
-  },
-  brandWordCompact: {
-    fontSize: 18,
-    lineHeight: 22,
   },
   content: {
     padding: 18,
@@ -200,12 +166,12 @@ export const styles = StyleSheet.create({
     borderRadius: 30,
     padding: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,106,0,0.16)",
-    shadowColor: "#ff5a00",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 3,
+    borderColor: COLOR.border,
+    shadowColor: "rgba(26,26,26,0.18)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 2,
   },
   heroTopRow: {
     flexDirection: "row",
@@ -217,20 +183,20 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "rgba(255,106,0,0.12)",
+    backgroundColor: COLOR.surfaceAlt,
     borderWidth: 1,
-    borderColor: "rgba(255,106,0,0.24)",
+    borderColor: COLOR.border,
   },
   heroFocusPill: {
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "#fff6ed",
+    backgroundColor: COLOR.surfaceAlt,
     borderWidth: 1,
     borderColor: COLOR.border,
   },
   heroFocusText: {
-    color: COLOR.offWhite,
+    color: COLOR.black,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -270,9 +236,9 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: "#fff6ee",
+    backgroundColor: COLOR.surface,
     borderWidth: 1,
-    borderColor: "rgba(255,106,0,0.14)",
+    borderColor: COLOR.border,
   },
   metricChipText: {
     color: COLOR.black,
@@ -289,8 +255,8 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.border,
   },
   highlightCard: {
-    backgroundColor: "#fff5ea",
-    borderColor: "rgba(255,106,0,0.16)",
+    backgroundColor: COLOR.surface,
+    borderColor: COLOR.border,
   },
   highlightCardAlt: {
     backgroundColor: COLOR.surface,
@@ -391,7 +357,7 @@ export const styles = StyleSheet.create({
   },
   pillActive: {
     borderColor: COLOR.orange,
-    backgroundColor: "rgba(255,106,0,0.16)",
+    backgroundColor: "rgba(255,106,0,0.08)",
   },
   pillText: {
     color: COLOR.muted,
@@ -555,8 +521,8 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.borderStrong,
   },
   statusBadgeDone: {
-    backgroundColor: "#fff1e3",
-    borderColor: "#ffd3b2",
+    backgroundColor: COLOR.surfaceAlt,
+    borderColor: COLOR.border,
   },
   statusBadgeText: {
     color: COLOR.black,
@@ -591,7 +557,7 @@ export const styles = StyleSheet.create({
     color: COLOR.muted,
     marginTop: 12,
     lineHeight: 21,
-    backgroundColor: "#fff6ee",
+    backgroundColor: COLOR.surfaceAlt,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
@@ -609,11 +575,11 @@ export const styles = StyleSheet.create({
   },
   exerciseItemDone: {
     borderColor: "rgba(255,106,0,0.36)",
-    backgroundColor: "#fff5ea",
+    backgroundColor: "rgba(255,106,0,0.05)",
   },
   exerciseItemPartial: {
     borderColor: COLOR.borderStrong,
-    backgroundColor: "#fffbf7",
+    backgroundColor: COLOR.surfaceAlt,
   },
   exerciseItemLocked: {
     opacity: 0.8,
@@ -655,7 +621,7 @@ export const styles = StyleSheet.create({
   seriesHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff4e8",
+    backgroundColor: COLOR.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
@@ -689,11 +655,11 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(32, 24, 18, 0.08)",
+    borderTopColor: "rgba(26, 26, 26, 0.08)",
     gap: 8,
   },
   seriesRowDone: {
-    backgroundColor: "rgba(255,106,0,0.08)",
+    backgroundColor: "rgba(255,106,0,0.06)",
   },
   seriesBadge: {
     flex: 0.8,
@@ -782,7 +748,7 @@ export const styles = StyleSheet.create({
   progressTrack: {
     height: 12,
     marginTop: 14,
-    backgroundColor: "#eadbcf",
+    backgroundColor: COLOR.surfaceAlt,
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -816,7 +782,7 @@ export const styles = StyleSheet.create({
   chartTrack: {
     height: 10,
     borderRadius: 999,
-    backgroundColor: "#efdfd1",
+    backgroundColor: COLOR.surfaceAlt,
     overflow: "hidden",
   },
   chartFill: {
@@ -830,7 +796,7 @@ export const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(32, 24, 18, 0.08)",
+    borderBottomColor: "rgba(26, 26, 26, 0.08)",
   },
   labelValueLabel: {
     color: COLOR.black,
@@ -891,7 +857,7 @@ export const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(32, 24, 18, 0.08)",
+    borderBottomColor: "rgba(26, 26, 26, 0.08)",
   },
   libraryInfo: {
     flex: 1,
@@ -924,7 +890,7 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
-    shadowColor: "#6d3b18",
+    shadowColor: "rgba(26,26,26,0.16)",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 18,
@@ -938,9 +904,9 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tabButtonActive: {
-    backgroundColor: "rgba(255,106,0,0.16)",
+    backgroundColor: "rgba(255,106,0,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,106,0,0.32)",
+    borderColor: "rgba(255,106,0,0.18)",
   },
   tabButtonIcon: {
     marginBottom: 4,
@@ -1037,10 +1003,10 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.borderStrong,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#0f0f0f",
+    backgroundColor: COLOR.surface,
   },
   videoScreenCloseText: {
-    color: COLOR.white,
+    color: COLOR.black,
     fontSize: 13,
     fontFamily: "SpaceGrotesk_700Bold",
   },
@@ -1059,7 +1025,7 @@ export const styles = StyleSheet.create({
   },
   dialogOverlay: {
     flex: 1,
-    backgroundColor: "rgba(23, 19, 17, 0.38)",
+    backgroundColor: "rgba(26, 26, 26, 0.24)",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -1072,7 +1038,7 @@ export const styles = StyleSheet.create({
     padding: 22,
     borderWidth: 1,
     borderColor: COLOR.border,
-    shadowColor: "#6d3b18",
+    shadowColor: "rgba(26,26,26,0.16)",
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.12,
     shadowRadius: 24,
