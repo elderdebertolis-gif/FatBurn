@@ -1,13 +1,23 @@
 ﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_700Bold,
+  useFonts,
+} from "@expo-google-fonts/space-grotesk";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Image,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar as NativeStatusBar,
   Text,
   TextInput,
   TextInputProps,
@@ -49,10 +59,10 @@ import { MUSCLE_GROUP_LABELS } from "./src/utils/workout";
 const SESSION_KEY = "@fatburn/current-user-id";
 
 const TAB_ITEMS = [
-  { key: "dashboard", label: "Resumo" },
-  { key: "workouts", label: "Treinos" },
-  { key: "progress", label: "Evolucao" },
-  { key: "profile", label: "Perfil" },
+  { key: "dashboard", label: "Resumo", icon: "view-dashboard-outline" },
+  { key: "workouts", label: "Treinos", icon: "dumbbell" },
+  { key: "progress", label: "Evolucao", icon: "chart-line" },
+  { key: "profile", label: "Perfil", icon: "account-outline" },
 ] as const;
 
 const OBJECTIVE_OPTIONS = [
@@ -79,8 +89,14 @@ const ENVIRONMENT_OPTIONS = [
 
 const TRAINING_DAYS_OPTIONS = ["2", "3", "4", "5", "6"] as const;
 
+const BRAND_ICON = require("./assets/branding/app-icon.png");
+const APP_VERSION = "1.0.0";
+const ANDROID_TOP_OFFSET = Platform.OS === "android" ? NativeStatusBar.currentHeight ?? 0 : 0;
+const TAB_BAR_OFFSET = Platform.OS === "android" ? 18 : 12;
+
 type TabKey = (typeof TAB_ITEMS)[number]["key"];
 type AuthMode = "login" | "register";
+type NoticeTone = "info" | "success" | "error";
 
 type ProfileFormState = {
   name: string;
@@ -105,6 +121,7 @@ type ReplacementContext = {
   muscleGroup: MuscleGroup;
 } | null;
 type VideoContext = { title: string; url: string } | null;
+type NoticeState = { title: string; message: string; tone: NoticeTone } | null;
 
 type ApiError = Error & { message: string };
 type SetDraftMap = Record<string, { repetitions: string; load: string }>;
@@ -250,6 +267,53 @@ function getWorkoutStatusLabel(status: WorkoutStatus["status"]) {
   return "Pendente";
 }
 
+type BrandIconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+function BrandWordmark({
+  compact,
+  centered,
+}: {
+  compact?: boolean;
+  centered?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.brandLockup,
+        compact ? styles.brandLockupCompact : null,
+        centered ? styles.brandLockupCentered : null,
+      ]}
+    >
+      <Image
+        source={BRAND_ICON}
+        resizeMode="contain"
+        style={compact ? styles.brandIconCompact : styles.brandIconLarge}
+      />
+      <View style={styles.brandWordColumn}>
+        <View style={styles.brandWordRow}>
+          <Text style={[styles.brandWordFat, compact ? styles.brandWordCompact : null]}>Fat</Text>
+          <Text style={[styles.brandWordBurn, compact ? styles.brandWordCompact : null]}>Burn</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function MetricChip({
+  label,
+  icon = "fire",
+}: {
+  label: string;
+  icon?: BrandIconName;
+}) {
+  return (
+    <View style={styles.metricChip}>
+      <MaterialCommunityIcons name={icon} size={15} color="#ff6a00" />
+      <Text style={styles.metricChipText}>{label}</Text>
+    </View>
+  );
+}
+
 function extractYouTubeVideoId(videoUrl: string) {
   try {
     const url = new URL(videoUrl);
@@ -316,7 +380,7 @@ function LabeledInput({
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        placeholderTextColor="#9b8f84"
+        placeholderTextColor="#6f6f6f"
         style={[styles.input, multiline ? styles.inputMultiline : null]}
         multiline={multiline}
         {...props}
@@ -349,15 +413,34 @@ function ActionButton({
       onPress={onPress}
       disabled={disabled}
     >
-      <Text
-        style={[
-          styles.buttonText,
-          compact ? styles.buttonTextCompact : null,
-          secondary ? styles.buttonSecondaryText : styles.buttonPrimaryText,
-        ]}
-      >
-        {label}
-      </Text>
+      {secondary ? (
+        <Text
+          style={[
+            styles.buttonText,
+            compact ? styles.buttonTextCompact : null,
+            styles.buttonSecondaryText,
+          ]}
+        >
+          {label}
+        </Text>
+      ) : (
+        <LinearGradient
+          colors={["#ff9d00", "#ff5a00"] as const}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.buttonFill}
+        >
+          <Text
+            style={[
+              styles.buttonText,
+              compact ? styles.buttonTextCompact : null,
+              styles.buttonPrimaryText,
+            ]}
+          >
+            {label}
+          </Text>
+        </LinearGradient>
+      )}
     </Pressable>
   );
 }
@@ -486,6 +569,11 @@ function UserFormFields({
 
 export default function App() {
   const { width: windowWidth } = useWindowDimensions();
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_700Bold,
+  });
   const [booting, setBooting] = useState(true);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
@@ -502,6 +590,7 @@ export default function App() {
   const [videoContext, setVideoContext] = useState<VideoContext>(null);
   const [setDrafts, setSetDrafts] = useState<SetDraftMap>({});
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<NoticeState>(null);
 
   useEffect(() => {
     void runConnectionGate();
@@ -574,7 +663,7 @@ export default function App() {
 
   async function handleLogin() {
     if (!loginEmail.trim() || !loginPassword.trim()) {
-      Alert.alert("Login", "Preencha email e senha.");
+      setNotice({ title: "Entrar", message: "Preencha email e senha.", tone: "error" });
       return;
     }
 
@@ -586,7 +675,11 @@ export default function App() {
       setLoginPassword("");
       setSessionError("");
     } catch (error) {
-      Alert.alert("Erro ao entrar", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao entrar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -595,7 +688,7 @@ export default function App() {
   async function handleRegister() {
     const validationError = validateForm(registerForm);
     if (validationError) {
-      Alert.alert("Cadastro", validationError);
+      setNotice({ title: "Cadastro", message: validationError, tone: "error" });
       return;
     }
 
@@ -608,7 +701,11 @@ export default function App() {
       setAuthMode("login");
       setSessionError("");
     } catch (error) {
-      Alert.alert("Erro ao cadastrar", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao cadastrar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -637,7 +734,11 @@ export default function App() {
       setSessionError("");
       setServerHealthy(true);
     } catch (error) {
-      Alert.alert("Falha ao sincronizar", (error as ApiError).message);
+      setNotice({
+        title: "Falha ao sincronizar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -650,7 +751,7 @@ export default function App() {
 
     const validationError = validateForm(profileForm);
     if (validationError) {
-      Alert.alert("Perfil", validationError);
+      setNotice({ title: "Perfil", message: validationError, tone: "error" });
       return;
     }
 
@@ -659,9 +760,17 @@ export default function App() {
       const nextBundle = await updateUserProfile(bundle.user.id, formToPayload(profileForm));
       await persistBundle(nextBundle);
       setSessionError("");
-      Alert.alert("Perfil atualizado", "Cadastro salvo e treino recalculado.");
+      setNotice({
+        title: "Perfil atualizado",
+        message: "Cadastro salvo e treino recalculado.",
+        tone: "success",
+      });
     } catch (error) {
-      Alert.alert("Erro ao salvar", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao salvar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -676,9 +785,17 @@ export default function App() {
     try {
       const nextBundle = await recalculateWorkout(bundle.user.id);
       await persistBundle(nextBundle);
-      Alert.alert("Treino atualizado", "A divisao foi refeita com base no perfil atual.");
+      setNotice({
+        title: "Treino atualizado",
+        message: "A divisao foi refeita com base no perfil atual.",
+        tone: "success",
+      });
     } catch (error) {
-      Alert.alert("Erro ao recalcular", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao recalcular",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -691,7 +808,7 @@ export default function App() {
 
     const weightKg = normalizeNumber(weightInput);
     if (!Number.isFinite(weightKg) || weightKg <= 0) {
-      Alert.alert("Pesagem", "Informe um peso valido.");
+      setNotice({ title: "Pesagem", message: "Informe um peso valido.", tone: "error" });
       return;
     }
 
@@ -699,9 +816,17 @@ export default function App() {
     try {
       const nextBundle = await saveDailyWeight(bundle.user.id, weightKg, getDayKey());
       await persistBundle(nextBundle);
-      Alert.alert("Pesagem salva", "A evolucao diaria foi atualizada.");
+      setNotice({
+        title: "Pesagem salva",
+        message: "A evolucao diaria foi atualizada.",
+        tone: "success",
+      });
     } catch (error) {
-      Alert.alert("Erro ao salvar peso", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao salvar peso",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -727,7 +852,11 @@ export default function App() {
       );
       await persistBundle(nextBundle);
     } catch (error) {
-      Alert.alert("Erro ao registrar exercicio", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao registrar exercicio",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -749,7 +878,11 @@ export default function App() {
       await persistBundle(nextBundle);
       setReplacementContext(null);
     } catch (error) {
-      Alert.alert("Erro ao trocar exercicio", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao trocar exercicio",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -795,7 +928,11 @@ export default function App() {
       });
       await persistBundle(nextBundle);
     } catch (error) {
-      Alert.alert("Erro ao salvar serie", (error as ApiError).message);
+      setNotice({
+        title: "Erro ao salvar serie",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -812,7 +949,11 @@ export default function App() {
       await persistBundle(nextBundle);
       setSelectedWorkoutId(workoutId);
     } catch (error) {
-      Alert.alert("Nao foi possivel iniciar", (error as ApiError).message);
+      setNotice({
+        title: "Nao foi possivel iniciar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -829,7 +970,11 @@ export default function App() {
       await persistBundle(nextBundle);
       setSelectedWorkoutId(null);
     } catch (error) {
-      Alert.alert("Nao foi possivel finalizar", (error as ApiError).message);
+      setNotice({
+        title: "Nao foi possivel finalizar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -845,7 +990,11 @@ export default function App() {
       const nextBundle = await restartWorkout(bundle.user.id, workoutId, workoutLabel, todayKey);
       await persistBundle(nextBundle);
     } catch (error) {
-      Alert.alert("Nao foi possivel reiniciar", (error as ApiError).message);
+      setNotice({
+        title: "Nao foi possivel reiniciar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -888,28 +1037,25 @@ export default function App() {
     setProfileForm((current) => ({ ...current, [field]: value }));
   }
 
-  if (booting) {
+  if (!fontsLoaded || booting) {
     return (
-      <SafeAreaView style={styles.loadingScreen}>
-        <StatusBar style="dark" />
-        <ActivityIndicator size="large" color="#1f4037" />
-        <Text style={styles.loadingTitle}>FatBurn</Text>
-        <Text style={styles.loadingText}>Verificando conexao com o servidor.</Text>
+      <SafeAreaView style={[styles.loadingScreen, { paddingTop: ANDROID_TOP_OFFSET }]}>
+        <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
+        <BrandWordmark centered />
+        <ActivityIndicator size="large" color="#ff6a00" />
+        <Text style={styles.loadingText}>Conectando seu plano.</Text>
       </SafeAreaView>
     );
   }
 
   if (!bundle && serverHealthy === false) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
+        <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
         <View style={styles.authScreen}>
-          <View style={styles.authBrandBlock}>
-            <Text style={styles.authBrand}>FatBurn</Text>
-            <Text style={styles.authBrandTitle}>Nao foi possivel conectar</Text>
-            <Text style={styles.authBrandText}>
-              Confirme se a API esta ativa e se o app esta apontando para o IP correto.
-            </Text>
+          <View style={styles.authHeroPanel}>
+            <View style={styles.authAccentLine} />
+            <BrandWordmark centered />
           </View>
 
           <View style={styles.authCard}>
@@ -933,19 +1079,12 @@ export default function App() {
 
   if (!bundle) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
+        <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
         <ScrollView contentContainerStyle={styles.authScreen}>
-          <View style={styles.authBrandBlock}>
-            <Text style={styles.authBrand}>FatBurn</Text>
-            <Text style={styles.authBrandTitle}>
-              {authMode === "login" ? "Entrar" : "Criar conta"}
-            </Text>
-            <Text style={styles.authBrandText}>
-              {authMode === "login"
-                ? "Acesse sua conta para acompanhar treino, peso e calorias."
-                : "Cadastre seus dados para gerar o treino ideal."}
-            </Text>
+          <View style={styles.authHeroPanel}>
+            <View style={styles.authAccentLine} />
+            <BrandWordmark centered />
           </View>
 
           <View style={styles.authCard}>
@@ -1074,14 +1213,24 @@ export default function App() {
     return (
       <>
         <View style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>
-            {getObjectiveLabel(user.objective)} | {getEnvironmentLabel(user.trainingEnvironment)}
-          </Text>
-          <Text style={styles.heroTitle}>{user.name}, seu plano esta ativo.</Text>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroBrandBadge}>
+              <Text style={styles.heroEyebrow}>FatBurn Active Plan</Text>
+            </View>
+            <View style={styles.heroFocusPill}>
+              <Text style={styles.heroFocusText}>{getEnvironmentLabel(user.trainingEnvironment)}</Text>
+            </View>
+          </View>
+          <Text style={styles.heroTitle}>Stronger you. Leaner you. Everyday.</Text>
           <Text style={styles.heroText}>
-            {user.trainingDaysPerWeek} treinos por semana, IMC {user.bmi} ({user.bmiClass}) e
-            biblioteca filtrada para {getEnvironmentLabel(user.trainingEnvironment).toLowerCase()}.
+            {user.name}, seu plano combina {user.trainingDaysPerWeek} treinos por semana, IMC{" "}
+            {user.bmi} ({user.bmiClass}) e uma biblioteca filtrada para{" "}
+            {getEnvironmentLabel(user.trainingEnvironment).toLowerCase()}.
           </Text>
+          <View style={styles.heroMetricRow}>
+            <MetricChip label={getObjectiveLabel(user.objective)} icon="target" />
+            <MetricChip label={`${todayCalories} kcal hoje`} icon="fire" />
+          </View>
         </View>
 
         <View style={styles.metricsRow}>
@@ -1150,26 +1299,19 @@ export default function App() {
     if (!selectedWorkout) {
       return (
         <>
-          <View style={[styles.card, styles.highlightCardAlt]}>
-            <Text style={styles.cardTitle}>Semana de treinos</Text>
-            <Text style={styles.cardBody}>
-              {currentWorkoutStatus
-                ? `O treino ${currentWorkoutStatus.workoutLabel} esta em andamento nesta semana. Abra a ficha para iniciar ou continuar a sessao.`
-                : "Todos os treinos da semana atual foram concluidos."}
-            </Text>
-            <Text style={styles.infoNote}>
-              Os exercicios so aparecem depois que voce abre um treino. Videos, marcacoes e trocas
-              ficam liberados apos tocar em Iniciar treino.
-            </Text>
-          </View>
+        <View style={[styles.card, styles.highlightCardAlt]}>
+          <Text style={styles.cardTitle}>Semana de treinos</Text>
+          <Text style={styles.cardBody}>
+            {currentWorkoutStatus
+              ? `O treino ${currentWorkoutStatus.workoutLabel} esta em andamento nesta semana. Abra a ficha para iniciar ou continuar a sessao.`
+              : "Todos os treinos da semana atual foram concluidos."}
+          </Text>
+        </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Selecione o treino</Text>
-            <Text style={styles.cardBody}>
-              Cada card mostra o status da semana e um resumo da divisao. Toque para abrir a ficha.
-            </Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Selecione o treino</Text>
 
-            {workoutPlan.length ? (
+          {workoutPlan.length ? (
               workoutPlan.map((workout) => {
                 const status = workoutStatusByLabel.get(workout.label);
 
@@ -1197,6 +1339,7 @@ export default function App() {
                         <Text
                           style={[
                             styles.statusBadgeText,
+                            status?.status === "concluido" ? styles.statusBadgeTextDone : null,
                             status?.status === "em_andamento" ? styles.statusBadgeTextActive : null,
                           ]}
                         >
@@ -1259,6 +1402,9 @@ export default function App() {
               <Text
                 style={[
                   styles.statusBadgeText,
+                  selectedWorkoutStatus?.status === "concluido"
+                    ? styles.statusBadgeTextDone
+                    : null,
                   selectedWorkoutStatus?.status === "em_andamento"
                     ? styles.statusBadgeTextActive
                     : null,
@@ -1615,18 +1761,11 @@ export default function App() {
             {user.email} | {getObjectiveLabel(user.objective)} |{" "}
             {getEnvironmentLabel(user.trainingEnvironment)} | {getLevelLabel(user.level)}
           </Text>
-          <Text style={styles.infoNote}>
-            Cadastro criado em {formatDateLabel(user.createdAt.slice(0, 10))}. O portal web usa a
-            mesma base SQLite.
-          </Text>
         </View>
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Editar cadastro</Text>
-            <Text style={styles.sectionSubtitle}>
-              Altere objetivo, ambiente, frequencia e dados fisicos quando precisar.
-            </Text>
           </View>
 
           <UserFormFields form={profileForm} onChange={updateProfileForm} />
@@ -1644,6 +1783,22 @@ export default function App() {
             <ActionButton label="Sair da conta" onPress={() => void handleLogout()} secondary disabled={busy} />
           </View>
         </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Sobre</Text>
+          <View style={styles.labelValue}>
+            <Text style={styles.labelValueLabel}>Versao</Text>
+            <Text style={styles.labelValueValue}>{APP_VERSION}</Text>
+          </View>
+          <View style={styles.labelValue}>
+            <Text style={styles.labelValueLabel}>Desenvolvido por</Text>
+            <Text style={styles.labelValueValue}>Elder Debertolis</Text>
+          </View>
+          <View style={styles.labelValue}>
+            <Text style={styles.labelValueLabel}>Cadastro criado em</Text>
+            <Text style={styles.labelValueValue}>{formatDateLabel(user.createdAt.slice(0, 10))}</Text>
+          </View>
+        </View>
       </>
     );
   }
@@ -1651,31 +1806,33 @@ export default function App() {
   const tabTitles: Record<TabKey, { title: string; subtitle: string }> = {
     dashboard: {
       title: "Resumo diario",
-      subtitle: "Meta, IMC, calorias e visao geral do plano.",
+      subtitle: "",
     },
     workouts: {
       title: "Treinos",
-      subtitle: "Resumo semanal, inicio da sessao e conclusao do proximo treino.",
+      subtitle: "",
     },
     progress: {
       title: "Progresso",
-      subtitle: "Pesagem diaria e calorias registradas.",
+      subtitle: "",
     },
     profile: {
       title: "Perfil",
-      subtitle: "Edite o cadastro sempre que precisar.",
+      subtitle: "",
     },
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
+      <StatusBar style="dark" translucent={false} backgroundColor="#f7f2ec" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.appHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.brand}>FatBurn</Text>
+            <BrandWordmark compact />
             <Text style={styles.headerTitle}>{tabTitles[activeTab].title}</Text>
-            <Text style={styles.headerSubtitle}>{tabTitles[activeTab].subtitle}</Text>
+            {tabTitles[activeTab].subtitle ? (
+              <Text style={styles.headerSubtitle}>{tabTitles[activeTab].subtitle}</Text>
+            ) : null}
           </View>
           <Pressable style={styles.headerAction} onPress={() => void refreshCurrentUser()}>
             <Text style={styles.headerActionText}>{busy ? "..." : "Sincronizar"}</Text>
@@ -1685,10 +1842,7 @@ export default function App() {
         {serverHealthy === false ? (
           <View style={[styles.card, styles.highlightCard]}>
             <Text style={styles.cardTitle}>Servidor offline</Text>
-            <Text style={styles.cardBody}>
-              O app precisa do servidor local para login, banco SQLite e portal do instrutor. API
-              atual: {API_BASE_URL}
-            </Text>
+            <Text style={styles.cardBody}>O app nao conseguiu acessar a API em {API_BASE_URL}.</Text>
           </View>
         ) : null}
 
@@ -1698,7 +1852,7 @@ export default function App() {
         {activeTab === "profile" ? renderProfile() : null}
       </ScrollView>
 
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { bottom: TAB_BAR_OFFSET }]}>
         {TAB_ITEMS.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -1707,6 +1861,12 @@ export default function App() {
               style={[styles.tabButton, active ? styles.tabButtonActive : null]}
               onPress={() => setActiveTab(tab.key)}
             >
+              <MaterialCommunityIcons
+                name={tab.icon}
+                size={18}
+                color={active ? "#ff6a00" : "#8f8f8f"}
+                style={styles.tabButtonIcon}
+              />
               <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
                 {tab.label}
               </Text>
@@ -1801,7 +1961,11 @@ export default function App() {
                     cacheEnabled: false,
                   }}
                   onError={(error: string) => {
-                    Alert.alert("Video indisponivel", `O player retornou: ${error}`);
+                    setNotice({
+                      title: "Video indisponivel",
+                      message: `O player retornou: ${error}`,
+                      tone: "error",
+                    });
                   }}
                 />
               ) : (
@@ -1825,6 +1989,32 @@ export default function App() {
                 />
               )
             ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={notice !== null}
+        onRequestClose={() => setNotice(null)}
+      >
+        <View style={styles.dialogOverlay}>
+          <View
+            style={[
+              styles.dialogCard,
+              notice?.tone === "error"
+                ? styles.dialogCardError
+                : notice?.tone === "success"
+                  ? styles.dialogCardSuccess
+                  : null,
+            ]}
+          >
+            <Text style={styles.dialogTitle}>{notice?.title ?? ""}</Text>
+            <Text style={styles.dialogText}>{notice?.message ?? ""}</Text>
+            <View style={styles.dialogActions}>
+              <ActionButton label="Entendi" onPress={() => setNotice(null)} compact />
+            </View>
           </View>
         </View>
       </Modal>

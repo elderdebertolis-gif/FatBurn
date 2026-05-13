@@ -3,11 +3,13 @@
     "name": "FatBurn",
     "slug": "fatburn",
     "version": "1.0.0",
+    "icon": "./assets/branding/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/branding/app-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f6efe8"
+      "backgroundColor": "#f7f2ec"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -16,12 +18,25 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.elderdebertolis.fatburn",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#f6efe8"
+        "foregroundImage": "./assets/branding/adaptive-foreground.png",
+        "monochromeImage": "./assets/branding/adaptive-monochrome.png",
+        "backgroundColor": "#050505"
       }
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6a4417e9-41f1-47bb-8ab4-1b113fc10f52"
+      }
+    },
+    "owner": "elder.debertolis"
   }
 }

@@ -3,6 +3,8 @@ mobile/.expo/
 mobile/.expo-shared/
 mobile/dist/
 mobile/web-build/
+mobile/credentials.json
+mobile/keystores/
 backend/data/*.sqlite
 backend/data/*.sqlite-shm
 backend/data/*.sqlite-wal

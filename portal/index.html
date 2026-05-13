@@ -7,30 +7,50 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <div id="notice" class="notice hidden" aria-live="polite"></div>
     <main class="page">
+      <header class="topbar">
+        <div class="brand-shell">
+          <img class="brand-icon" src="/branding/app-icon.png" alt="FatBurn" />
+          <div>
+            <p class="eyebrow">FatBurn Portal</p>
+            <h1>Gestao do instrutor</h1>
+          </div>
+        </div>
+        <button id="refresh-data" class="secondary">Sincronizar</button>
+      </header>
+
       <section class="hero">
-        <p class="eyebrow">FatBurn Admin</p>
-        <h1>Gestao web do instrutor</h1>
-        <p>
-          Use esta pagina para consultar e editar os alunos cadastrados, ajustar os treinos e
-          manter a biblioteca central de exercicios por grupo muscular, objetivo, ambiente e video.
-        </p>
+        <div class="hero-copy">
+          <p class="eyebrow">Base central de treino</p>
+          <h2>Edite alunos, treinos e biblioteca em um unico painel.</h2>
+          <p>
+            O portal usa a mesma base do app para consultar alunos, recalcular fichas e manter os
+            exercicios por grupo muscular, objetivo, ambiente e video.
+          </p>
+          <div class="hero-pills">
+            <span class="hero-pill">Gym workouts</span>
+            <span class="hero-pill">Home workouts</span>
+            <span class="hero-pill">Burn calories</span>
+          </div>
+        </div>
+        <div class="hero-mark">
+          <img class="hero-logo" src="/branding/app-icon.png" alt="FatBurn" />
+          <p>Mesma identidade, mesma base e mesma biblioteca do app mobile.</p>
+        </div>
       </section>
 
       <section class="grid">
         <article class="card">
-          <h2>Base de dados</h2>
+          <h2><span class="section-icon">01</span>Base de dados</h2>
           <p class="muted">
             Exercicios e usuarios sao lidos da mesma base SQLite usada pelo aplicativo.
           </p>
           <div id="server-status" class="item"></div>
-          <div class="actions">
-            <button id="refresh-data">Atualizar dados</button>
-          </div>
         </article>
 
         <article class="card">
-          <h2>Cadastrar exercicio</h2>
+          <h2><span class="section-icon">02</span>Cadastrar exercicio</h2>
           <div class="form-grid">
             <label>
               <span>Nome</span>
@@ -87,7 +107,7 @@
         <article class="card wide">
           <div class="section-head">
             <div>
-              <h2>Alunos cadastrados</h2>
+              <h2><span class="section-icon">03</span>Alunos cadastrados</h2>
               <p class="muted">Edite cadastro, recalcule a ficha e troque exercicios do treino.</p>
             </div>
             <span id="students-count" class="badge">0 alunos</span>
@@ -98,7 +118,7 @@
         <article class="card wide">
           <div class="section-head">
             <div>
-              <h2>Biblioteca de exercicios</h2>
+              <h2><span class="section-icon">04</span>Biblioteca de exercicios</h2>
               <p class="muted">Cadastre novos exercicios ou altere os existentes.</p>
             </div>
             <span id="exercises-count" class="badge">0 exercicios</span>

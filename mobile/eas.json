@@ -1,0 +1,23 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "credentialsSource": "local",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://fatburn-backend.onrender.com"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "credentialsSource": "local",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://fatburn-backend.onrender.com"
+      }
+    }
+  }
+}

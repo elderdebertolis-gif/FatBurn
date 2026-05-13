@@ -25,6 +25,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const portalDir = normalize(join(__dirname, "..", "portal"));
+const brandingDir = normalize(join(__dirname, "..", "mobile", "assets", "branding"));
 const port = Number(process.env.PORT) || 3030;
 const host = "0.0.0.0";
 
@@ -33,6 +34,10 @@ const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".svg": "image/svg+xml; charset=utf-8",
 };
 
 function sendJson(response, statusCode, payload) {
@@ -252,6 +257,23 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (pathname.startsWith("/branding/") && request.method === "GET") {
+      const assetPath = normalize(join(brandingDir, pathname.replace("/branding/", "")));
+
+      if (!assetPath.startsWith(brandingDir)) {
+        sendText(response, 403, "Acesso negado");
+        return;
+      }
+
+      const file = await readFile(assetPath);
+      response.writeHead(200, {
+        "Content-Type": contentTypes[extname(assetPath)] ?? "application/octet-stream",
+        "Cache-Control": "public, max-age=300",
+      });
+      response.end(file);
+      return;
+    }
+
     if (pathname === "/api/exercises" && request.method === "GET") {
       sendJson(response, 200, { exercises: listExercises() });
       return;
@@ -316,8 +338,13 @@ createServer(async (request, response) => {
       const password = (payload.password ?? "").trim();
       const user = findUserRowByEmail(email);
 
-      if (!user || user.password !== password) {
-        sendJson(response, 401, { error: "Credenciais invalidas." });
+      if (!user) {
+        sendJson(response, 404, { error: "Usuario nao encontrado." });
+        return;
+      }
+
+      if (user.password !== password) {
+        sendJson(response, 401, { error: "Senha invalida." });
         return;
       }
 

@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import {
   CompletionEntry,
   Exercise,
@@ -7,11 +6,10 @@ import {
   WorkoutStatus,
 } from "./types";
 
-const defaultBaseUrl =
-  Platform.OS === "android" ? "http://10.0.2.2:3030" : "http://localhost:3030";
+const defaultBaseUrl = "https://fatburn-backend.onrender.com";
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? defaultBaseUrl;
-const REQUEST_TIMEOUT_MS = 5000;
+const REQUEST_TIMEOUT_MS = 15000;
 
 export type UserBundle = {
   user: UserProfile;
@@ -62,17 +60,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(
-        `Tempo esgotado ao acessar ${API_BASE_URL}. Se estiver no celular fisico, defina EXPO_PUBLIC_API_URL com o IP da sua maquina.`
+        `Tempo esgotado ao acessar ${API_BASE_URL}. Verifique se o backend esta online ou ajuste EXPO_PUBLIC_API_URL.`
+      );
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error(
+        `Nao foi possivel acessar ${API_BASE_URL}. Verifique se o backend esta online ou ajuste EXPO_PUBLIC_API_URL.`
       );
     }
 
     if (error instanceof Error) {
-      throw new Error(
-        `Nao foi possivel acessar ${API_BASE_URL}. Se estiver no celular fisico, defina EXPO_PUBLIC_API_URL com o IP da sua maquina.`
-      );
+      throw error;
     }
 
-    throw error;
+    throw new Error("Falha ao comunicar com o servidor.");
   } finally {
     clearTimeout(timeout);
   }

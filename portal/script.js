@@ -60,6 +60,17 @@ const state = {
   health: null,
 };
 
+function showNotice(message, tone = "info") {
+  const container = $("#notice");
+  container.textContent = message;
+  container.dataset.tone = tone;
+  container.classList.remove("hidden");
+  window.clearTimeout(showNotice.timer);
+  showNotice.timer = window.setTimeout(() => {
+    container.classList.add("hidden");
+  }, 4000);
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -463,7 +474,7 @@ async function saveExercise() {
     !payload.videoUrl ||
     !payload.description
   ) {
-    window.alert("Preencha todos os campos do exercicio.");
+    showNotice("Preencha todos os campos do exercicio.", "error");
     return;
   }
 
@@ -478,6 +489,7 @@ async function saveExercise() {
   $("#exercise-video").value = "";
   $("#exercise-description").value = "";
   await loadAll();
+  showNotice("Exercicio cadastrado com sucesso.", "success");
 }
 
 function readEditorFields(root) {
@@ -503,6 +515,7 @@ async function saveExerciseEdit(button) {
   });
 
   await loadAll();
+  showNotice("Exercicio atualizado.", "success");
 }
 
 async function saveUser(button) {
@@ -526,6 +539,7 @@ async function saveUser(button) {
   });
 
   await loadAll();
+  showNotice("Cadastro do aluno atualizado.", "success");
 }
 
 async function recalculateUserWorkout(button) {
@@ -539,6 +553,7 @@ async function recalculateUserWorkout(button) {
   });
 
   await loadAll();
+  showNotice("Treino do aluno recalculado.", "success");
 }
 
 async function replaceWorkoutExercise(button) {
@@ -561,20 +576,25 @@ async function replaceWorkoutExercise(button) {
   });
 
   await loadAll();
+  showNotice("Exercicio do treino alterado.", "success");
 }
 
 populateGroups();
 
 $("#refresh-data").addEventListener("click", () => {
-  loadAll().catch((error) => window.alert(error.message));
+  loadAll()
+    .then(() => showNotice("Dados sincronizados.", "success"))
+    .catch((error) => showNotice(error.message, "error"));
 });
 
 $("#refresh-exercises").addEventListener("click", () => {
-  loadAll().catch((error) => window.alert(error.message));
+  loadAll()
+    .then(() => showNotice("Biblioteca recarregada.", "success"))
+    .catch((error) => showNotice(error.message, "error"));
 });
 
 $("#save-exercise").addEventListener("click", () => {
-  saveExercise().catch((error) => window.alert(error.message));
+  saveExercise().catch((error) => showNotice(error.message, "error"));
 });
 
 document.addEventListener("click", (event) => {
@@ -597,9 +617,10 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  handler().catch((error) => window.alert(error.message));
+  handler().catch((error) => showNotice(error.message, "error"));
 });
 
 loadAll().catch((error) => {
   $("#server-status").innerHTML = `<p class="muted-dark">${escapeHtml(error.message)}</p>`;
+  showNotice(error.message, "error");
 });
