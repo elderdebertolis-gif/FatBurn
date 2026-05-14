@@ -11,6 +11,13 @@
   </head>
   <body>
     <div id="notice" class="notice hidden" aria-live="polite"></div>
+    <div id="portal-loading" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
+      <div class="loading-card">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <strong id="portal-loading-title">Carregando portal</strong>
+        <p id="portal-loading-message" class="muted">Aguarde alguns segundos.</p>
+      </div>
+    </div>
 
     <section id="auth-gate" class="auth-gate">
       <div class="auth-card">

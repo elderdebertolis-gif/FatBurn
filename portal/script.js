@@ -126,6 +126,9 @@ const state = {
 
 const SESSION_STORAGE_KEY = "fatburn.portal.session";
 const API_BASE_URL = "https://fatburn-backend.onrender.com";
+const loadingState = {
+  depth: 0,
+};
 
 function showNotice(message, tone = "info") {
   const container = $("#notice");
@@ -214,6 +217,45 @@ function clearSession() {
   state.session = null;
   state.instructor = null;
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function setLoading(isLoading, title = "Carregando portal", message = "Aguarde alguns segundos.") {
+  const overlay = $("#portal-loading");
+  const titleNode = $("#portal-loading-title");
+  const messageNode = $("#portal-loading-message");
+
+  if (isLoading) {
+    loadingState.depth += 1;
+    titleNode.textContent = title;
+    messageNode.textContent = message;
+    overlay.classList.remove("hidden");
+    return;
+  }
+
+  loadingState.depth = Math.max(0, loadingState.depth - 1);
+  if (loadingState.depth === 0) {
+    overlay.classList.add("hidden");
+  }
+}
+
+async function withLoading(title, message, task) {
+  setLoading(true, title, message);
+  try {
+    return await task();
+  } finally {
+    setLoading(false);
+  }
+}
+
+function setLoginBusy(isBusy) {
+  const button = $("#portal-login");
+  const email = $("#portal-login-email");
+  const password = $("#portal-login-password");
+
+  button.disabled = isBusy;
+  email.disabled = isBusy;
+  password.disabled = isBusy;
+  button.textContent = isBusy ? "Entrando..." : "Entrar no portal";
 }
 
 function resetCollections() {
@@ -1107,17 +1149,28 @@ async function loginInstructor() {
     return;
   }
 
-  const payload = await request("/api/auth/instructor/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+  setLoginBusy(true);
+  try {
+    await withLoading(
+      "Entrando no portal",
+      "Validando credenciais e carregando os dados principais.",
+      async () => {
+        const payload = await request("/api/auth/instructor/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        });
 
-  persistSession(payload);
-  syncAuthUi();
-  $("#portal-login-password").value = "";
-  await loadAll();
-  setActiveScreen("dashboard");
-  showNotice("Portal autenticado com sucesso.", "success");
+        persistSession(payload);
+        syncAuthUi();
+        $("#portal-login-password").value = "";
+        await loadAll();
+        setActiveScreen("dashboard");
+      }
+    );
+    showNotice("Portal autenticado com sucesso.", "success");
+  } finally {
+    setLoginBusy(false);
+  }
 }
 
 async function logoutInstructor() {
@@ -1334,7 +1387,11 @@ async function replaceWorkoutExercise(button) {
 populateGroups();
 
 $("#refresh-exercises").addEventListener("click", () => {
-  loadAll()
+  withLoading(
+    "Atualizando biblioteca",
+    "Recarregando a lista de exercicios do portal.",
+    () => loadAll()
+  )
     .then(() => showNotice("Biblioteca recarregada.", "success"))
     .catch((error) => showNotice(error.message, "error"));
 });
@@ -1448,7 +1505,11 @@ renderPortalUsers();
 syncNavigation();
 
 if (state.session?.token) {
-  loadAll().catch((error) => {
+  withLoading(
+    "Recuperando sessao",
+    "Carregando os modulos liberados para este acesso.",
+    () => loadAll()
+  ).catch((error) => {
     clearSession();
     resetCollections();
     syncAuthUi();
