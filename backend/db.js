@@ -4,11 +4,15 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { seedExercises } from "./catalog.js";
 import {
+  ROLE_PERMISSION_PRESETS,
   SENSITIVE_CONSENT_VERSION,
   PRIVACY_POLICY_VERSION,
+  normalizePortalPermissions,
+  normalizePortalRole,
   hashPassword,
   hashToken,
   needsPasswordMigration,
+  sanitizeInstructor,
   sanitizeUserProfile,
 } from "./security.js";
 import {
@@ -113,6 +117,9 @@ db.exec(`
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    role TEXT,
+    permissions_json TEXT,
+    is_active INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -161,6 +168,9 @@ ensureColumn(
   "sensitive_consent_accepted_at",
   "sensitive_consent_accepted_at TEXT"
 );
+ensureColumn("instructors", "role", "role TEXT");
+ensureColumn("instructors", "permissions_json", "permissions_json TEXT");
+ensureColumn("instructors", "is_active", "is_active INTEGER");
 
 const insertExercise = db.prepare(`
   INSERT INTO exercises (
@@ -282,14 +292,26 @@ const mapUserRow = (row) => ({
   updatedAt: row.updated_at,
 });
 
-const mapInstructorRow = (row) => ({
-  id: row.id,
-  name: row.name,
-  email: row.email,
-  passwordHash: row.password_hash,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+const mapInstructorRow = (row) => {
+  let permissions = [];
+  try {
+    permissions = row.permissions_json ? JSON.parse(row.permissions_json) : [];
+  } catch {
+    permissions = [];
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    passwordHash: row.password_hash,
+    role: normalizePortalRole(row.role ?? "instrutor"),
+    permissions,
+    isActive: row.is_active === null || row.is_active === undefined ? true : Boolean(row.is_active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 function migrateLegacyPasswords() {
   const legacyUsers = db.prepare("SELECT id, password FROM users").all();
@@ -321,6 +343,39 @@ function migrateLegacyPasswords() {
   }
 }
 
+function migrateInstructorAccessMetadata() {
+  const rows = db
+    .prepare("SELECT id, email, role, permissions_json, is_active FROM instructors")
+    .all();
+  const adminEmail = String(process.env.FATBURN_ADMIN_EMAIL ?? "admin@fatburn.app")
+    .trim()
+    .toLowerCase();
+
+  for (const row of rows) {
+    let parsedPermissions = [];
+    try {
+      parsedPermissions = row.permissions_json ? JSON.parse(row.permissions_json) : [];
+    } catch {
+      parsedPermissions = [];
+    }
+
+    const isConfiguredAdmin = String(row.email ?? "").trim().toLowerCase() === adminEmail;
+    const role = isConfiguredAdmin
+      ? "admin"
+      : normalizePortalRole(row.role ?? "instrutor");
+    const permissions = normalizePortalPermissions(parsedPermissions, role);
+    const isActive = row.is_active === null || row.is_active === undefined ? 1 : Number(Boolean(row.is_active));
+
+    db.prepare(
+      `
+      UPDATE instructors
+      SET role = ?, permissions_json = ?, is_active = ?, updated_at = ?
+      WHERE id = ?
+    `
+    ).run(role, JSON.stringify(permissions), isActive, new Date().toISOString(), row.id);
+  }
+}
+
 function ensureDefaultInstructor() {
   const email = String(process.env.FATBURN_ADMIN_EMAIL ?? "admin@fatburn.app")
     .trim()
@@ -337,14 +392,17 @@ function ensureDefaultInstructor() {
   const timestamp = new Date().toISOString();
   db.prepare(
     `
-    INSERT INTO instructors (id, name, email, password_hash, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO instructors (id, name, email, password_hash, role, permissions_json, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `
   ).run(
     generateId("instructor"),
     "Instrutor FatBurn",
     email,
     hashPassword(password),
+    "admin",
+    JSON.stringify(ROLE_PERMISSION_PRESETS.admin),
+    1,
     timestamp,
     timestamp
   );
@@ -352,6 +410,7 @@ function ensureDefaultInstructor() {
 
 migrateLegacyPasswords();
 ensureDefaultInstructor();
+migrateInstructorAccessMetadata();
 
 function padDatePart(value) {
   return String(value).padStart(2, "0");
@@ -601,6 +660,81 @@ export function findInstructorRowByEmail(email) {
     .prepare("SELECT * FROM instructors WHERE lower(email) = lower(?)")
     .get(email);
   return row ? mapInstructorRow(row) : null;
+}
+
+export function findInstructorRowById(id) {
+  const row = db.prepare("SELECT * FROM instructors WHERE id = ?").get(id);
+  return row ? mapInstructorRow(row) : null;
+}
+
+export function listInstructors() {
+  return db
+    .prepare("SELECT * FROM instructors ORDER BY created_at ASC")
+    .all()
+    .map((row) => sanitizeInstructor(mapInstructorRow(row)));
+}
+
+export function createInstructor(payload) {
+  const role = normalizePortalRole(payload.role);
+  const permissions = normalizePortalPermissions(payload.permissions, role);
+  const timestamp = new Date().toISOString();
+  const id = generateId("instructor");
+
+  db.prepare(
+    `
+    INSERT INTO instructors (
+      id, name, email, password_hash, role, permissions_json, is_active, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `
+  ).run(
+    id,
+    payload.name,
+    payload.email.toLowerCase(),
+    hashPassword(payload.password),
+    role,
+    JSON.stringify(permissions),
+    payload.isActive ? 1 : 0,
+    timestamp,
+    timestamp
+  );
+
+  return sanitizeInstructor(findInstructorRowById(id));
+}
+
+export function updateInstructor(instructorId, payload) {
+  const existing = findInstructorRowById(instructorId);
+  const role = normalizePortalRole(payload.role ?? existing.role);
+  const permissions = normalizePortalPermissions(payload.permissions ?? existing.permissions, role);
+  const nextPasswordHash =
+    typeof payload.password === "string" && payload.password.trim()
+      ? hashPassword(payload.password.trim())
+      : existing.passwordHash;
+
+  db.prepare(
+    `
+    UPDATE instructors
+    SET
+      name = ?,
+      email = ?,
+      password_hash = ?,
+      role = ?,
+      permissions_json = ?,
+      is_active = ?,
+      updated_at = ?
+    WHERE id = ?
+  `
+  ).run(
+    payload.name,
+    payload.email.toLowerCase(),
+    nextPasswordHash,
+    role,
+    JSON.stringify(permissions),
+    payload.isActive ? 1 : 0,
+    new Date().toISOString(),
+    instructorId
+  );
+
+  return sanitizeInstructor(findInstructorRowById(instructorId));
 }
 
 export function createSession(payload) {

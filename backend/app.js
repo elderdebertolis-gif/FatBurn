@@ -4,18 +4,21 @@ import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createExercise,
+  createInstructor,
   createSession,
   deleteUserAccount,
   exportUserData,
   finishWorkoutSession,
   findExerciseById,
   findInstructorRowByEmail,
+  findInstructorRowById,
   findSessionByToken,
   findUserRowByEmail,
   findUserRowById,
   getUserBundle,
   logAuditEvent,
   listUsers,
+  listInstructors,
   listExercises,
   recalculateWorkoutPlan,
   registerUser,
@@ -26,15 +29,19 @@ import {
   updateCompletion,
   updateUserConsents,
   updateExercise,
+  updateInstructor,
   updateWorkoutSet,
   updateUser,
   upsertWeightEntry,
 } from "./db.js";
 import {
+  PORTAL_PERMISSIONS,
   PRIVACY_POLICY_VERSION,
   SENSITIVE_CONSENT_VERSION,
   buildConsentSnapshot,
+  hasInstructorPermission,
   issueSessionToken,
+  sanitizeInstructor,
   verifyPassword,
 } from "./security.js";
 
@@ -197,6 +204,26 @@ function validateExercisePayload(payload) {
   return null;
 }
 
+function validatePortalUserPayload(payload, options = { requirePassword: true }) {
+  const required = ["name", "email", "role"];
+
+  for (const field of required) {
+    if (payload[field] === undefined || payload[field] === null || payload[field] === "") {
+      return `Campo obrigatorio ausente: ${field}`;
+    }
+  }
+
+  if (options.requirePassword && (!payload.password || payload.password.trim().length < 8)) {
+    return "A senha do usuario do portal deve ter pelo menos 8 caracteres.";
+  }
+
+  if (!options.requirePassword && payload.password && payload.password.trim().length > 0 && payload.password.trim().length < 8) {
+    return "A nova senha do usuario do portal deve ter pelo menos 8 caracteres.";
+  }
+
+  return null;
+}
+
 function extractYouTubeVideoId(videoUrl = "") {
   try {
     const url = new URL(videoUrl);
@@ -242,10 +269,12 @@ function getAuthContext(request) {
   }
 
   const user = session.userId ? findUserRowById(session.userId) : null;
+  const instructor = session.instructorId ? findInstructorRowById(session.instructorId) : null;
   return {
     token,
     session,
     user,
+    instructor,
   };
 }
 
@@ -262,8 +291,21 @@ function requireInstructor(response, authContext) {
     return false;
   }
 
-  if (authContext.session.role !== "instructor") {
+  if (authContext.session.role !== "instructor" || !authContext.instructor?.isActive) {
     sendJson(response, 403, { error: "Acesso restrito ao portal do instrutor." });
+    return false;
+  }
+
+  return true;
+}
+
+function requirePortalPermission(response, authContext, permission) {
+  if (!requireInstructor(response, authContext)) {
+    return false;
+  }
+
+  if (!hasInstructorPermission(authContext.instructor, permission)) {
+    sendJson(response, 403, { error: "Voce nao tem permissao para executar essa acao no portal." });
     return false;
   }
 
@@ -429,7 +471,7 @@ createServer(async (request, response) => {
 
     if (pathname === "/api/exercises" && request.method === "GET") {
       const authContext = getAuthContext(request);
-      if (!requireInstructor(response, authContext)) {
+      if (!requirePortalPermission(response, authContext, "exercises.read")) {
         return;
       }
 
@@ -439,7 +481,7 @@ createServer(async (request, response) => {
 
     if (pathname === "/api/exercises" && request.method === "POST") {
       const authContext = getAuthContext(request);
-      if (!requireInstructor(response, authContext)) {
+      if (!requirePortalPermission(response, authContext, "exercises.write")) {
         return;
       }
 
@@ -476,7 +518,7 @@ createServer(async (request, response) => {
     const exerciseMatch = pathname.match(/^\/api\/exercises\/([^/]+)$/);
     if (exerciseMatch && request.method === "PUT") {
       const authContext = getAuthContext(request);
-      if (!requireInstructor(response, authContext)) {
+      if (!requirePortalPermission(response, authContext, "exercises.write")) {
         return;
       }
 
@@ -567,6 +609,11 @@ createServer(async (request, response) => {
         return;
       }
 
+      if (!instructor.isActive) {
+        sendJson(response, 403, { error: "Esse acesso do portal esta inativo." });
+        return;
+      }
+
       if (!verifyPassword(password, instructor.passwordHash)) {
         sendJson(response, 401, { error: "Senha invalida." });
         return;
@@ -589,11 +636,8 @@ createServer(async (request, response) => {
       sendJson(response, 200, {
         token,
         role: "instructor",
-        instructor: {
-          id: instructor.id,
-          name: instructor.name,
-          email: instructor.email,
-        },
+        permissions: PORTAL_PERMISSIONS,
+        instructor: sanitizeInstructor(instructor),
       });
       return;
     }
@@ -666,11 +710,124 @@ createServer(async (request, response) => {
 
     if (pathname === "/api/users" && request.method === "GET") {
       const authContext = getAuthContext(request);
-      if (!requireInstructor(response, authContext)) {
+      if (!requirePortalPermission(response, authContext, "students.read")) {
         return;
       }
 
-      sendJson(response, 200, { users: listUsers(), exercises: listExercises() });
+      sendJson(response, 200, { users: listUsers() });
+      return;
+    }
+
+    if (pathname === "/api/portal-users" && request.method === "GET") {
+      const authContext = getAuthContext(request);
+      if (!requirePortalPermission(response, authContext, "portal_users.read")) {
+        return;
+      }
+
+      sendJson(response, 200, { portalUsers: listInstructors() });
+      return;
+    }
+
+    if (pathname === "/api/portal-users" && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requirePortalPermission(response, authContext, "portal_users.write")) {
+        return;
+      }
+
+      const payload = await readBody(request);
+      const validationError = validatePortalUserPayload(payload, { requirePassword: true });
+      if (validationError) {
+        sendJson(response, 400, { error: validationError });
+        return;
+      }
+
+      const email = normalizeEmail(payload.email);
+      if (findInstructorRowByEmail(email)) {
+        sendJson(response, 409, { error: "Ja existe um usuario do portal com esse email." });
+        return;
+      }
+
+      const portalUser = createInstructor({
+        name: payload.name?.trim(),
+        email,
+        password: payload.password?.trim(),
+        role: payload.role,
+        permissions: payload.permissions,
+        isActive: payload.isActive !== false,
+      });
+
+      logAuditEvent({
+        actorType: "instructor",
+        actorId: authContext.session.instructorId,
+        action: "portal_user.create",
+        targetType: "instructor",
+        targetId: portalUser.id,
+      });
+      sendJson(response, 201, { portalUser });
+      return;
+    }
+
+    const portalUserMatch = pathname.match(/^\/api\/portal-users\/([^/]+)$/);
+    if (portalUserMatch && request.method === "PUT") {
+      const authContext = getAuthContext(request);
+      if (!requirePortalPermission(response, authContext, "portal_users.write")) {
+        return;
+      }
+
+      const targetId = portalUserMatch[1];
+      const existingPortalUser = findInstructorRowById(targetId);
+      if (!existingPortalUser) {
+        sendJson(response, 404, { error: "Usuario do portal nao encontrado." });
+        return;
+      }
+
+      const payload = await readBody(request);
+      const validationError = validatePortalUserPayload(payload, { requirePassword: false });
+      if (validationError) {
+        sendJson(response, 400, { error: validationError });
+        return;
+      }
+
+      const email = normalizeEmail(payload.email);
+      const duplicate = findInstructorRowByEmail(email);
+      if (duplicate && duplicate.id !== targetId) {
+        sendJson(response, 409, { error: "Ja existe um usuario do portal com esse email." });
+        return;
+      }
+
+      if (authContext.instructor?.id === targetId) {
+        if (payload.role && payload.role !== existingPortalUser.role) {
+          sendJson(response, 400, {
+            error: "Nao altere o proprio perfil por essa tela. Use outro administrador.",
+          });
+          return;
+        }
+
+        if (payload.isActive === false) {
+          sendJson(response, 400, {
+            error: "Voce nao pode inativar o proprio acesso por essa tela.",
+          });
+          return;
+        }
+      }
+
+      const portalUser = updateInstructor(targetId, {
+        name: payload.name?.trim(),
+        email,
+        password: payload.password?.trim(),
+        role: payload.role,
+        permissions: payload.permissions,
+        isActive: payload.isActive !== false,
+      });
+
+      logAuditEvent({
+        actorType: "instructor",
+        actorId: authContext.session.instructorId,
+        action: "portal_user.update",
+        targetType: "instructor",
+        targetId: portalUser.id,
+      });
+      sendJson(response, 200, { portalUser });
       return;
     }
 
@@ -755,6 +912,9 @@ createServer(async (request, response) => {
       if (!requireUserScope(response, authContext, userMatch[1])) {
         return;
       }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "students.read")) {
+        return;
+      }
 
       sendJson(response, 200, getUserBundle(userMatch[1]));
       return;
@@ -763,6 +923,9 @@ createServer(async (request, response) => {
     if (userMatch && request.method === "PUT") {
       const authContext = getAuthContext(request);
       if (!requireUserScope(response, authContext, userMatch[1])) {
+        return;
+      }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "students.write")) {
         return;
       }
 
@@ -812,6 +975,9 @@ createServer(async (request, response) => {
       if (!requireUserScope(response, authContext, recalcMatch[1])) {
         return;
       }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
+        return;
+      }
       if (!requireActiveConsent(response, authContext, recalcMatch[1])) {
         return;
       }
@@ -825,6 +991,9 @@ createServer(async (request, response) => {
     if (weightMatch && request.method === "POST") {
       const authContext = getAuthContext(request);
       if (!requireUserScope(response, authContext, weightMatch[1])) {
+        return;
+      }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "students.write")) {
         return;
       }
       if (!requireActiveConsent(response, authContext, weightMatch[1])) {
@@ -842,6 +1011,9 @@ createServer(async (request, response) => {
     if (completionMatch && request.method === "POST") {
       const authContext = getAuthContext(request);
       if (!requireUserScope(response, authContext, completionMatch[1])) {
+        return;
+      }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
       if (!requireActiveConsent(response, authContext, completionMatch[1])) {
@@ -878,6 +1050,9 @@ createServer(async (request, response) => {
       if (!requireUserScope(response, authContext, updateSetMatch[1])) {
         return;
       }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
+        return;
+      }
       if (!requireActiveConsent(response, authContext, updateSetMatch[1])) {
         return;
       }
@@ -895,6 +1070,9 @@ createServer(async (request, response) => {
     if (replaceMatch && request.method === "POST") {
       const authContext = getAuthContext(request);
       if (!requireUserScope(response, authContext, replaceMatch[1])) {
+        return;
+      }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
       if (!requireActiveConsent(response, authContext, replaceMatch[1])) {
@@ -918,6 +1096,9 @@ createServer(async (request, response) => {
       if (!requireUserScope(response, authContext, startWorkoutMatch[1])) {
         return;
       }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
+        return;
+      }
       if (!requireActiveConsent(response, authContext, startWorkoutMatch[1])) {
         return;
       }
@@ -934,6 +1115,9 @@ createServer(async (request, response) => {
       if (!requireUserScope(response, authContext, finishWorkoutMatch[1])) {
         return;
       }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
+        return;
+      }
       if (!requireActiveConsent(response, authContext, finishWorkoutMatch[1])) {
         return;
       }
@@ -948,6 +1132,9 @@ createServer(async (request, response) => {
     if (restartWorkoutMatch && request.method === "POST") {
       const authContext = getAuthContext(request);
       if (!requireUserScope(response, authContext, restartWorkoutMatch[1])) {
+        return;
+      }
+      if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
       if (!requireActiveConsent(response, authContext, restartWorkoutMatch[1])) {

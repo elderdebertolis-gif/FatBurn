@@ -34,6 +34,38 @@ const levelOptions = [
   { value: "avancado", label: "Avancado" },
 ];
 
+const portalRoleOptions = [
+  { value: "admin", label: "Admin" },
+  { value: "instrutor", label: "Instrutor" },
+  { value: "visualizador", label: "Visualizador" },
+];
+
+const portalRoleLabels = Object.fromEntries(
+  portalRoleOptions.map((option) => [option.value, option.label])
+);
+
+const portalPermissionOptions = [
+  { value: "students.read", label: "Ver alunos" },
+  { value: "students.write", label: "Editar alunos" },
+  { value: "workouts.write", label: "Editar treinos" },
+  { value: "exercises.read", label: "Ver exercicios" },
+  { value: "exercises.write", label: "Editar exercicios" },
+  { value: "portal_users.read", label: "Ver acessos do portal" },
+  { value: "portal_users.write", label: "Gerenciar acessos do portal" },
+];
+
+const rolePermissionPresets = {
+  admin: portalPermissionOptions.map((item) => item.value),
+  instrutor: [
+    "students.read",
+    "students.write",
+    "workouts.write",
+    "exercises.read",
+    "exercises.write",
+  ],
+  visualizador: ["students.read", "exercises.read"],
+};
+
 const trainingDayOptions = ["2", "3", "4", "5", "6"].map((value) => ({
   value,
   label: `${value}x`,
@@ -57,6 +89,7 @@ const $ = (selector) => document.querySelector(selector);
 const state = {
   session: null,
   instructor: null,
+  portalUsers: [],
   users: [],
   exercises: [],
   studentQuery: "",
@@ -160,11 +193,94 @@ function syncAuthUi() {
   const gate = $("#auth-gate");
   const page = $(".page");
   const logoutButton = $("#portal-logout");
+  const sessionMeta = $("#portal-session-meta");
   const loggedIn = Boolean(state.session?.token);
 
   gate.classList.toggle("hidden", loggedIn);
   page.classList.toggle("hidden", !loggedIn);
   logoutButton.classList.toggle("hidden", !loggedIn);
+  sessionMeta.classList.toggle("hidden", !loggedIn);
+
+  if (loggedIn && state.instructor) {
+    sessionMeta.textContent = `${state.instructor.name} | ${
+      portalRoleLabels[state.instructor.role] ?? state.instructor.role
+    }`;
+  }
+}
+
+function getCurrentPermissions() {
+  return state.instructor?.permissions ?? [];
+}
+
+function hasPermission(permission) {
+  return getCurrentPermissions().includes(permission);
+}
+
+function getPermissionsForRole(role) {
+  return rolePermissionPresets[role] ?? rolePermissionPresets.instrutor;
+}
+
+function getSelectedPermissions(root) {
+  return [...root.querySelectorAll("[data-permission-checkbox]:checked")].map(
+    (input) => input.value
+  );
+}
+
+function renderPermissionChecklist(selectedPermissions = [], disabled = false, namePrefix = "perm") {
+  const selected = new Set(selectedPermissions);
+  return portalPermissionOptions
+    .map(
+      (permission, index) => `
+        <label class="permission-item">
+          <input
+            data-permission-checkbox
+            type="checkbox"
+            name="${escapeHtml(namePrefix)}-${index}"
+            value="${escapeHtml(permission.value)}"
+            ${selected.has(permission.value) ? "checked" : ""}
+            ${disabled ? "disabled" : ""}
+          />
+          <span>${escapeHtml(permission.label)}</span>
+        </label>
+      `
+    )
+    .join("");
+}
+
+function syncPortalSections() {
+  $("#exercise-create-section").classList.toggle("hidden", !hasPermission("exercises.write"));
+  $("#portal-students-section").classList.toggle(
+    "hidden",
+    !hasPermission("students.read") && !hasPermission("exercises.read")
+  );
+  $("#portal-students-card").classList.toggle("hidden", !hasPermission("students.read"));
+  $("#portal-exercises-section").classList.toggle("hidden", !hasPermission("exercises.read"));
+  $("#portal-access-section").classList.toggle("hidden", !hasPermission("portal_users.read"));
+  $("#portal-user-create").classList.toggle("hidden", !hasPermission("portal_users.write"));
+}
+
+function syncCreatePortalUserPermissions() {
+  const role = $("#portal-user-role").value;
+  const disabled = role === "admin";
+  $("#portal-user-permissions").innerHTML = renderPermissionChecklist(
+    getPermissionsForRole(role),
+    disabled,
+    "portal-user-create"
+  );
+}
+
+function syncEditorPortalUserPermissions(select) {
+  const editor = select.closest("[data-portal-user-id]");
+  const permissionsRoot = editor?.querySelector("[data-permissions-root]");
+  if (!permissionsRoot) {
+    return;
+  }
+
+  permissionsRoot.innerHTML = renderPermissionChecklist(
+    getPermissionsForRole(select.value),
+    select.value === "admin",
+    `portal-user-${editor.dataset.portalUserId}`
+  );
 }
 
 async function request(path, options = {}) {
@@ -213,6 +329,9 @@ function getCompatibleExercises(user, slot, currentExerciseId) {
 
 function renderUsers() {
   const container = $("#students-list");
+  const canEditStudents = hasPermission("students.write");
+  const canEditWorkouts = hasPermission("workouts.write");
+  const canReplaceWorkoutExercises = canEditWorkouts && hasPermission("exercises.read");
   const query = normalizeText(state.studentQuery);
   const filteredUsers = state.users.filter((user) =>
     matchesQuery(
@@ -245,7 +364,7 @@ function renderUsers() {
 
   filteredUsers.forEach((user) => {
     const article = document.createElement("article");
-    article.className = "item";
+    article.className = `item${canEditStudents || canEditWorkouts ? "" : " readonly"}`;
 
     const workoutsMarkup = user.workoutPlan
       .map((workout) => {
@@ -253,6 +372,19 @@ function renderUsers() {
           .map((slot) => {
             const currentExercise = state.exercises.find((exercise) => exercise.id === slot.exerciseId);
             const options = getCompatibleExercises(user, slot, slot.exerciseId);
+
+            if (!canReplaceWorkoutExercises) {
+              return `
+                <div class="slot-editor">
+                  <div class="slot-copy">
+                    <strong>${escapeHtml(currentExercise?.name ?? "Exercicio nao encontrado")}</strong>
+                    <span>${escapeHtml(groupLabels[slot.muscleGroup] ?? slot.muscleGroup)} | ${escapeHtml(
+                      currentExercise?.equipment ?? "-"
+                    )}</span>
+                  </div>
+                </div>
+              `;
+            }
 
             return `
               <div class="slot-editor">
@@ -338,85 +470,101 @@ function renderUsers() {
             <div class="form-grid compact">
               <label>
                 <span>Nome</span>
-                <input data-field="name" type="text" value="${escapeHtml(user.name)}" />
+                <input data-field="name" type="text" value="${escapeHtml(user.name)}" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Email</span>
-                <input data-field="email" type="email" value="${escapeHtml(user.email)}" />
+                <input data-field="email" type="email" value="${escapeHtml(user.email)}" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Nova senha temporaria</span>
-                <input data-field="password" type="password" value="" placeholder="Opcional" />
+                <input data-field="password" type="password" value="" placeholder="Opcional" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Idade</span>
-                <input data-field="age" type="number" min="12" value="${escapeHtml(user.age)}" />
+                <input data-field="age" type="number" min="18" value="${escapeHtml(user.age)}" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Sexo</span>
-                <select data-field="sex">${optionMarkup(sexOptions, user.sex)}</select>
+                <select data-field="sex" ${!canEditStudents ? "disabled" : ""}>${optionMarkup(sexOptions, user.sex)}</select>
               </label>
               <label>
                 <span>Altura (cm)</span>
                 <input data-field="heightCm" type="number" min="100" value="${escapeHtml(
                   user.heightCm
-                )}" />
+                )}" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Peso atual (kg)</span>
                 <input data-field="weightKg" type="number" min="1" step="0.1" value="${escapeHtml(
                   user.weightKg
-                )}" />
+                )}" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Meta de peso (kg)</span>
                 <input data-field="targetWeightKg" type="number" min="1" step="0.1" value="${escapeHtml(
                   user.targetWeightKg
-                )}" />
+                )}" ${!canEditStudents ? "disabled" : ""} />
               </label>
               <label>
                 <span>Objetivo</span>
-                <select data-field="objective">${optionMarkup(
+                <select data-field="objective" ${!canEditStudents ? "disabled" : ""}>${optionMarkup(
                   userObjectiveOptions,
                   user.objective
                 )}</select>
               </label>
               <label>
                 <span>Ambiente</span>
-                <select data-field="trainingEnvironment">${optionMarkup(
+                <select data-field="trainingEnvironment" ${!canEditStudents ? "disabled" : ""}>${optionMarkup(
                   environmentOptions,
                   user.trainingEnvironment
                 )}</select>
               </label>
               <label>
                 <span>Treinos por semana</span>
-                <select data-field="trainingDaysPerWeek">${optionMarkup(
+                <select data-field="trainingDaysPerWeek" ${!canEditStudents ? "disabled" : ""}>${optionMarkup(
                   trainingDayOptions,
                   String(user.trainingDaysPerWeek)
                 )}</select>
               </label>
               <label>
                 <span>Nivel</span>
-                <select data-field="level">${optionMarkup(levelOptions, user.level)}</select>
+                <select data-field="level" ${!canEditStudents ? "disabled" : ""}>${optionMarkup(levelOptions, user.level)}</select>
               </label>
               <label class="full">
                 <span>Restricoes</span>
-                <textarea data-field="restrictions" rows="3">${escapeHtml(
+                <textarea data-field="restrictions" rows="3" ${!canEditStudents ? "disabled" : ""}>${escapeHtml(
                   user.restrictions ?? ""
                 )}</textarea>
               </label>
             </div>
 
-            <div class="actions">
-              <button data-action="save-user" data-user-id="${escapeHtml(user.id)}">Salvar cadastro</button>
-              <button
-                class="secondary"
-                data-action="recalculate-user-workout"
-                data-user-id="${escapeHtml(user.id)}"
-              >
-                Recalcular treino
-              </button>
-            </div>
+            ${
+              canEditStudents || canEditWorkouts
+                ? `
+                  <div class="actions">
+                    ${
+                      canEditStudents
+                        ? `<button data-action="save-user" data-user-id="${escapeHtml(user.id)}">Salvar cadastro</button>`
+                        : ""
+                    }
+                    ${
+                      canEditWorkouts
+                        ? `
+                          <button
+                            class="secondary"
+                            data-action="recalculate-user-workout"
+                            data-user-id="${escapeHtml(user.id)}"
+                          >
+                            Recalcular treino
+                          </button>
+                        `
+                        : ""
+                    }
+                  </div>
+                `
+                : ""
+            }
           </section>
 
           <section class="subsection">
@@ -437,6 +585,7 @@ function renderUsers() {
 
 function renderExercises() {
   const container = $("#exercises-list");
+  const canEditExercises = hasPermission("exercises.write");
   const query = normalizeText(state.exerciseQuery);
   const filteredExercises = state.exercises.filter((exercise) =>
     matchesQuery(
@@ -470,7 +619,7 @@ function renderExercises() {
 
   filteredExercises.forEach((exercise) => {
     const article = document.createElement("article");
-    article.className = "item";
+    article.className = `item${canEditExercises ? "" : " readonly"}`;
 
     article.innerHTML = `
       <details class="editor">
@@ -492,19 +641,19 @@ function renderExercises() {
           <div class="form-grid compact">
             <label>
               <span>Nome</span>
-              <input data-field="name" type="text" value="${escapeHtml(exercise.name)}" />
+              <input data-field="name" type="text" value="${escapeHtml(exercise.name)}" ${!canEditExercises ? "disabled" : ""} />
             </label>
             <label>
               <span>Grupo muscular</span>
-              <select data-field="muscleGroup">${optionMarkup(groups, exercise.muscleGroup)}</select>
+              <select data-field="muscleGroup" ${!canEditExercises ? "disabled" : ""}>${optionMarkup(groups, exercise.muscleGroup)}</select>
             </label>
             <label>
               <span>Objetivo</span>
-              <select data-field="goal">${optionMarkup(objectiveOptions, exercise.goal)}</select>
+              <select data-field="goal" ${!canEditExercises ? "disabled" : ""}>${optionMarkup(objectiveOptions, exercise.goal)}</select>
             </label>
             <label>
               <span>Ambiente</span>
-              <select data-field="environment">${optionMarkup(
+              <select data-field="environment" ${!canEditExercises ? "disabled" : ""}>${optionMarkup(
                 environmentOptions,
                 exercise.environment
               )}</select>
@@ -513,27 +662,33 @@ function renderExercises() {
               <span>Calorias</span>
               <input data-field="calories" type="number" min="1" value="${escapeHtml(
                 exercise.calories
-              )}" />
+              )}" ${!canEditExercises ? "disabled" : ""} />
             </label>
             <label>
               <span>Equipamento</span>
-              <input data-field="equipment" type="text" value="${escapeHtml(exercise.equipment)}" />
+              <input data-field="equipment" type="text" value="${escapeHtml(exercise.equipment)}" ${!canEditExercises ? "disabled" : ""} />
             </label>
             <label class="full">
               <span>Link do video</span>
-              <input data-field="videoUrl" type="url" value="${escapeHtml(exercise.videoUrl)}" />
+              <input data-field="videoUrl" type="url" value="${escapeHtml(exercise.videoUrl)}" ${!canEditExercises ? "disabled" : ""} />
             </label>
             <label class="full">
               <span>Descricao</span>
-              <textarea data-field="description" rows="3">${escapeHtml(
+              <textarea data-field="description" rows="3" ${!canEditExercises ? "disabled" : ""}>${escapeHtml(
                 exercise.description
               )}</textarea>
             </label>
           </div>
           <div class="actions">
-            <button data-action="save-exercise-edit" data-exercise-id="${escapeHtml(exercise.id)}">
-              Salvar alteracoes
-            </button>
+            ${
+              canEditExercises
+                ? `
+                  <button data-action="save-exercise-edit" data-exercise-id="${escapeHtml(exercise.id)}">
+                    Salvar alteracoes
+                  </button>
+                `
+                : ""
+            }
             <a class="link" href="${escapeHtml(exercise.videoUrl)}" target="_blank" rel="noreferrer">
               Abrir link atual
             </a>
@@ -546,16 +701,120 @@ function renderExercises() {
   });
 }
 
-async function loadAll() {
-  const [usersPayload, exercisesPayload] = await Promise.all([
-    request("/api/users"),
-    request("/api/exercises"),
-  ]);
-  state.users = usersPayload.users;
-  state.exercises = exercisesPayload.exercises;
+function renderPortalUsers() {
+  const container = $("#portal-users-list");
+  const count = $("#portal-users-count");
+  const canManagePortalUsers = hasPermission("portal_users.write");
 
+  if (!container || !count) {
+    return;
+  }
+
+  count.textContent = `${state.portalUsers.length} acesso(s)`;
+  container.innerHTML = "";
+
+  if (!state.portalUsers.length) {
+    container.innerHTML = "<p class='muted-dark'>Nenhum usuario interno cadastrado ainda.</p>";
+    return;
+  }
+
+  state.portalUsers.forEach((portalUser) => {
+    const article = document.createElement("article");
+    article.className = `item${canManagePortalUsers ? "" : " readonly"}`;
+    const canEditThisUser = canManagePortalUsers;
+    const currentRolePermissions = portalUser.permissions ?? getPermissionsForRole(portalUser.role);
+
+    article.innerHTML = `
+      <details class="editor">
+        <summary class="editor-summary">
+          <div>
+            <h3>${escapeHtml(portalUser.name)}</h3>
+            <p>${escapeHtml(portalUser.email)}</p>
+            <p>
+              Perfil: ${escapeHtml(portalRoleLabels[portalUser.role] ?? portalUser.role)} |
+              Status: ${portalUser.isActive ? "Ativo" : "Inativo"}
+            </p>
+          </div>
+          <span class="badge">${escapeHtml(currentRolePermissions.length)} permissoes</span>
+        </summary>
+
+        <div class="editor-body" data-portal-user-id="${escapeHtml(portalUser.id)}">
+          <div class="form-grid compact">
+            <label>
+              <span>Nome</span>
+              <input data-field="name" type="text" value="${escapeHtml(portalUser.name)}" ${!canEditThisUser ? "disabled" : ""} />
+            </label>
+            <label>
+              <span>Email</span>
+              <input data-field="email" type="email" value="${escapeHtml(portalUser.email)}" ${!canEditThisUser ? "disabled" : ""} />
+            </label>
+            <label>
+              <span>Nova senha</span>
+              <input data-field="password" type="password" value="" placeholder="Opcional" ${!canEditThisUser ? "disabled" : ""} />
+            </label>
+            <label>
+              <span>Perfil</span>
+              <select data-field="role" data-portal-role-select ${!canEditThisUser ? "disabled" : ""}>
+                ${optionMarkup(portalRoleOptions, portalUser.role)}
+              </select>
+            </label>
+            <label class="full">
+              <span>Permissoes</span>
+              <div class="permission-grid" data-permissions-root>
+                ${renderPermissionChecklist(
+                  currentRolePermissions,
+                  !canEditThisUser || portalUser.role === "admin",
+                  `portal-user-${portalUser.id}`
+                )}
+              </div>
+            </label>
+            <label class="full checkbox-inline">
+              <input data-field="isActive" type="checkbox" ${portalUser.isActive ? "checked" : ""} ${!canEditThisUser ? "disabled" : ""} />
+              <span>Usuario ativo</span>
+            </label>
+          </div>
+
+          <div class="permission-summary">
+            ${currentRolePermissions
+              .map((permission) => `<span class="chip">${escapeHtml(permission)}</span>`)
+              .join("")}
+          </div>
+
+          ${
+            canEditThisUser
+              ? `
+                <div class="actions">
+                  <button data-action="save-portal-user-edit" data-portal-user-id="${escapeHtml(portalUser.id)}">
+                    Salvar acesso
+                  </button>
+                </div>
+              `
+              : ""
+          }
+        </div>
+      </details>
+    `;
+
+    container.append(article);
+  });
+}
+
+async function loadAll() {
+  const [usersPayload, exercisesPayload, portalUsersPayload] = await Promise.all([
+    hasPermission("students.read") ? request("/api/users") : Promise.resolve({ users: [] }),
+    hasPermission("exercises.read") ? request("/api/exercises") : Promise.resolve({ exercises: [] }),
+    hasPermission("portal_users.read")
+      ? request("/api/portal-users")
+      : Promise.resolve({ portalUsers: [] }),
+  ]);
+  state.users = usersPayload.users ?? [];
+  state.exercises = exercisesPayload.exercises ?? [];
+  state.portalUsers = portalUsersPayload.portalUsers ?? [];
+
+  syncPortalSections();
   renderUsers();
   renderExercises();
+  renderPortalUsers();
 }
 
 async function loginInstructor() {
@@ -590,8 +849,11 @@ async function logoutInstructor() {
 
   clearSession();
   syncAuthUi();
+  state.portalUsers = [];
   state.users = [];
   state.exercises = [];
+  syncPortalSections();
+  $("#portal-users-list").innerHTML = "";
   $("#students-list").innerHTML = "";
   $("#exercises-list").innerHTML = "";
 }
@@ -635,8 +897,67 @@ async function saveExercise() {
 
 function readEditorFields(root) {
   return Object.fromEntries(
-    [...root.querySelectorAll("[data-field]")].map((field) => [field.dataset.field, field.value])
+    [...root.querySelectorAll("[data-field]")].map((field) => [
+      field.dataset.field,
+      field.type === "checkbox" ? field.checked : field.value,
+    ])
   );
+}
+
+async function savePortalUser() {
+  const payload = {
+    name: $("#portal-user-name").value.trim(),
+    email: $("#portal-user-email").value.trim().toLowerCase(),
+    password: $("#portal-user-password").value.trim(),
+    role: $("#portal-user-role").value,
+    permissions: getSelectedPermissions($("#portal-user-permissions")),
+    isActive: $("#portal-user-active").checked,
+  };
+
+  if (!payload.name || !payload.email || !payload.password) {
+    showNotice("Preencha nome, email e senha do novo acesso.", "error");
+    return;
+  }
+
+  await request("/api/portal-users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  $("#portal-user-name").value = "";
+  $("#portal-user-email").value = "";
+  $("#portal-user-password").value = "";
+  $("#portal-user-role").value = "instrutor";
+  $("#portal-user-active").checked = true;
+  syncCreatePortalUserPermissions();
+  await loadAll();
+  showNotice("Acesso do portal criado com sucesso.", "success");
+}
+
+async function savePortalUserEdit(button) {
+  const editor = button.closest("[data-portal-user-id]");
+  const portalUserId = editor?.dataset.portalUserId;
+  if (!editor || !portalUserId) {
+    return;
+  }
+
+  const raw = readEditorFields(editor);
+  const permissionsRoot = editor.querySelector("[data-permissions-root]");
+  const payload = {
+    ...raw,
+    email: String(raw.email ?? "").trim().toLowerCase(),
+    password: String(raw.password ?? "").trim(),
+    permissions: permissionsRoot ? getSelectedPermissions(permissionsRoot) : [],
+    isActive: Boolean(raw.isActive),
+  };
+
+  await request(`/api/portal-users/${portalUserId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+  await loadAll();
+  showNotice("Acesso do portal atualizado.", "success");
 }
 
 async function saveExerciseEdit(button) {
@@ -735,6 +1056,10 @@ $("#save-exercise").addEventListener("click", () => {
   saveExercise().catch((error) => showNotice(error.message, "error"));
 });
 
+$("#save-portal-user").addEventListener("click", () => {
+  savePortalUser().catch((error) => showNotice(error.message, "error"));
+});
+
 $("#portal-login").addEventListener("click", () => {
   loginInstructor().catch((error) => showNotice(error.message, "error"));
 });
@@ -753,6 +1078,21 @@ $("#exercises-search").addEventListener("input", (event) => {
   renderExercises();
 });
 
+$("#portal-user-role").addEventListener("change", () => {
+  syncCreatePortalUserPermissions();
+});
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  if (target.matches("[data-portal-role-select]")) {
+    syncEditorPortalUserPermissions(target);
+  }
+});
+
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) {
@@ -766,6 +1106,7 @@ document.addEventListener("click", (event) => {
     "save-user": () => saveUser(button),
     "recalculate-user-workout": () => recalculateUserWorkout(button),
     "replace-workout-exercise": () => replaceWorkoutExercise(button),
+    "save-portal-user-edit": () => savePortalUserEdit(button),
   };
 
   const handler = handlers[action];
@@ -783,6 +1124,8 @@ if (storedSession) {
 }
 
 syncAuthUi();
+syncPortalSections();
+syncCreatePortalUserPermissions();
 
 if (state.session?.token) {
   loadAll().catch((error) => {

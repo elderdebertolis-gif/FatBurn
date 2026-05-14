@@ -39,12 +39,13 @@
         <div class="brand-shell">
           <img class="brand-logo-horizontal" src="./branding/logo-horizontal-dark.png" alt="FatBurn" />
         </div>
+        <div id="portal-session-meta" class="session-meta hidden"></div>
         <div class="actions">
           <button id="portal-logout" class="secondary hidden">Sair</button>
         </div>
       </header>
 
-      <section class="grid">
+      <section id="exercise-create-section" class="grid">
         <article class="card wide">
           <h2><span class="section-icon">01</span>Cadastrar exercicio</h2>
           <div class="form-grid">
@@ -99,11 +100,66 @@
         </article>
       </section>
 
-      <section class="grid">
+      <section id="portal-access-section" class="grid hidden">
         <article class="card wide">
           <div class="section-head">
             <div>
-              <h2><span class="section-icon">02</span>Alunos cadastrados</h2>
+              <h2><span class="section-icon">02</span>Acessos do portal</h2>
+              <p class="muted">Crie usuarios internos e defina o que cada um pode acessar.</p>
+            </div>
+            <div class="section-tools">
+              <span id="portal-users-count" class="badge">0 acessos</span>
+            </div>
+          </div>
+
+          <div id="portal-user-create" class="stack">
+            <article class="item">
+              <h3>Novo usuario do portal</h3>
+              <div class="form-grid compact">
+                <label>
+                  <span>Nome</span>
+                  <input id="portal-user-name" type="text" placeholder="Ex.: Ana Silva" />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input id="portal-user-email" type="email" placeholder="ana@fatburn.app" />
+                </label>
+                <label>
+                  <span>Senha inicial</span>
+                  <input id="portal-user-password" type="password" placeholder="Minimo 8 caracteres" />
+                </label>
+                <label>
+                  <span>Perfil</span>
+                  <select id="portal-user-role">
+                    <option value="admin">Admin</option>
+                    <option value="instrutor" selected>Instrutor</option>
+                    <option value="visualizador">Visualizador</option>
+                  </select>
+                </label>
+                <label class="full">
+                  <span>Permissoes</span>
+                  <div id="portal-user-permissions" class="permission-grid"></div>
+                </label>
+                <label class="full checkbox-inline">
+                  <input id="portal-user-active" type="checkbox" checked />
+                  <span>Usuario ativo</span>
+                </label>
+              </div>
+              <div class="actions">
+                <button id="save-portal-user">Criar acesso</button>
+              </div>
+            </article>
+          </div>
+
+          <div id="portal-users-list" class="stack"></div>
+        </article>
+      </section>
+
+      <section id="portal-students-section" class="grid">
+        <article id="portal-students-card" class="card wide">
+          <div class="section-head">
+            <div>
+              <h2><span class="section-icon">03</span>Alunos cadastrados</h2>
               <p class="muted">Edite cadastro, recalcule a ficha e troque exercicios do treino.</p>
             </div>
             <div class="section-tools">
@@ -121,10 +177,10 @@
           <div id="students-list" class="stack"></div>
         </article>
 
-        <article class="card wide">
+        <article id="portal-exercises-section" class="card wide">
           <div class="section-head">
             <div>
-              <h2><span class="section-icon">03</span>Biblioteca de exercicios</h2>
+              <h2><span class="section-icon">04</span>Biblioteca de exercicios</h2>
               <p class="muted">Cadastre novos exercicios ou altere os existentes.</p>
             </div>
             <div class="section-tools">

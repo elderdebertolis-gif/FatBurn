@@ -48,6 +48,8 @@ http://localhost:3030
 - O cadastro exige aceite do aviso de privacidade e do tratamento de dados sensiveis de saude.
 - O app permite `exportar dados` e `excluir conta` pela aba `Perfil`.
 - O `portal` exige login de instrutor.
+- O `portal` agora suporta usuarios internos com perfis `admin`, `instrutor` e `visualizador`.
+- O `admin` pode criar outros acessos e definir permissões por modulo no proprio portal.
 
 Credenciais padrao locais do instrutor:
 

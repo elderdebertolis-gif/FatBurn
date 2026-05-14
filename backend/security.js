@@ -7,6 +7,28 @@ const PASSWORD_DIGEST = "sha512";
 
 export const PRIVACY_POLICY_VERSION = "2026.05";
 export const SENSITIVE_CONSENT_VERSION = "2026.05";
+export const PORTAL_ROLES = ["admin", "instrutor", "visualizador"];
+export const PORTAL_PERMISSIONS = [
+  "students.read",
+  "students.write",
+  "workouts.write",
+  "exercises.read",
+  "exercises.write",
+  "portal_users.read",
+  "portal_users.write",
+];
+
+export const ROLE_PERMISSION_PRESETS = {
+  admin: [...PORTAL_PERMISSIONS],
+  instrutor: [
+    "students.read",
+    "students.write",
+    "workouts.write",
+    "exercises.read",
+    "exercises.write",
+  ],
+  visualizador: ["students.read", "exercises.read"],
+};
 
 function safeEquals(left, right) {
   const leftBuffer = Buffer.from(left);
@@ -105,5 +127,49 @@ export function sanitizeUserProfile(user) {
     workoutPlan: user.workoutPlan,
     createdAt: user.createdAt,
     consents: buildConsentSnapshot(user),
+  };
+}
+
+export function normalizePortalRole(role) {
+  return PORTAL_ROLES.includes(role) ? role : "instrutor";
+}
+
+export function normalizePortalPermissions(permissions = [], role = "instrutor") {
+  if (role === "admin") {
+    return [...PORTAL_PERMISSIONS];
+  }
+
+  const values = Array.isArray(permissions) ? permissions : [];
+  const normalized = values.filter((permission) => PORTAL_PERMISSIONS.includes(permission));
+  const unique = [...new Set(normalized)];
+  return unique.length ? unique : [...(ROLE_PERMISSION_PRESETS[role] ?? ROLE_PERMISSION_PRESETS.instrutor)];
+}
+
+export function getInstructorPermissions(instructor) {
+  if (!instructor) {
+    return [];
+  }
+
+  return normalizePortalPermissions(instructor.permissions ?? [], normalizePortalRole(instructor.role));
+}
+
+export function hasInstructorPermission(instructor, permission) {
+  if (!instructor?.isActive) {
+    return false;
+  }
+
+  return getInstructorPermissions(instructor).includes(permission);
+}
+
+export function sanitizeInstructor(instructor) {
+  return {
+    id: instructor.id,
+    name: instructor.name,
+    email: instructor.email,
+    role: normalizePortalRole(instructor.role),
+    permissions: getInstructorPermissions(instructor),
+    isActive: Boolean(instructor.isActive),
+    createdAt: instructor.createdAt,
+    updatedAt: instructor.updatedAt,
   };
 }

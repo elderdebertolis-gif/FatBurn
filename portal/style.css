@@ -111,6 +111,16 @@ textarea {
   gap: 14px;
 }
 
+.session-meta {
+  margin-left: auto;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .brand-logo-horizontal {
   width: min(320px, 52vw);
   height: 84px;
@@ -284,6 +294,40 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.permission-item,
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card-soft);
+}
+
+.permission-item input,
+.checkbox-inline input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.permission-item span,
+.checkbox-inline span {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 500;
+}
+
 label span {
   display: block;
   margin-bottom: 7px;
@@ -363,6 +407,10 @@ button.secondary {
   background: var(--card-soft);
 }
 
+.item.readonly {
+  border-style: dashed;
+}
+
 .editor-body,
 .workout-block,
 .slot-editor {
@@ -418,6 +466,13 @@ button.secondary {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.permission-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .compact {
