@@ -84,6 +84,33 @@ const environmentLabels = {
 
 const groupLabels = Object.fromEntries(groups.map((group) => [group.value, group.label]));
 
+const screenDefinitions = {
+  dashboard: {
+    eyebrow: "Portal FatBurn",
+    title: "Home",
+    description: "Visao geral do portal, modulos disponiveis e indicadores rapidos.",
+    available: () => true,
+  },
+  students: {
+    eyebrow: "Alunos",
+    title: "Alunos",
+    description: "Cadastros, edicao de perfil e manutencao da ficha semanal.",
+    available: () => hasPermission("students.read"),
+  },
+  exercises: {
+    eyebrow: "Exercicios",
+    title: "Exercicios",
+    description: "Biblioteca tecnica e cadastro de novos exercicios do app.",
+    available: () => hasPermission("exercises.read") || hasPermission("exercises.write"),
+  },
+  access: {
+    eyebrow: "Acessos",
+    title: "Acessos do portal",
+    description: "Perfis internos, permissoes e status de acesso ao painel.",
+    available: () => hasPermission("portal_users.read") || hasPermission("portal_users.write"),
+  },
+};
+
 const $ = (selector) => document.querySelector(selector);
 
 const state = {
@@ -94,9 +121,11 @@ const state = {
   exercises: [],
   studentQuery: "",
   exerciseQuery: "",
+  activeScreen: "dashboard",
 };
 
 const SESSION_STORAGE_KEY = "fatburn.portal.session";
+const API_BASE_URL = "https://fatburn-backend.onrender.com";
 
 function showNotice(message, tone = "info") {
   const container = $("#notice");
@@ -150,8 +179,6 @@ function matchesQuery(parts, query) {
   return normalizeText(parts.filter(Boolean).join(" ")).includes(query);
 }
 
-const API_BASE_URL = "https://fatburn-backend.onrender.com";
-
 function readStoredSession() {
   try {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -189,6 +216,17 @@ function clearSession() {
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
+function resetCollections() {
+  state.portalUsers = [];
+  state.users = [];
+  state.exercises = [];
+}
+
+function setSidebarOpen(isOpen) {
+  document.body.classList.toggle("sidebar-expanded", isOpen);
+  $("#sidebar-backdrop").classList.toggle("hidden", !isOpen);
+}
+
 function syncAuthUi() {
   const gate = $("#auth-gate");
   const page = $(".page");
@@ -202,9 +240,16 @@ function syncAuthUi() {
   sessionMeta.classList.toggle("hidden", !loggedIn);
 
   if (loggedIn && state.instructor) {
-    sessionMeta.textContent = `${state.instructor.name} | ${
-      portalRoleLabels[state.instructor.role] ?? state.instructor.role
-    }`;
+    sessionMeta.innerHTML = `
+      <strong>${escapeHtml(state.instructor.name)}</strong>
+      <span>${escapeHtml(portalRoleLabels[state.instructor.role] ?? state.instructor.role)}</span>
+    `;
+  } else {
+    sessionMeta.innerHTML = "";
+  }
+
+  if (!loggedIn) {
+    setSidebarOpen(false);
   }
 }
 
@@ -248,15 +293,23 @@ function renderPermissionChecklist(selectedPermissions = [], disabled = false, n
 }
 
 function syncPortalSections() {
-  $("#exercise-create-section").classList.toggle("hidden", !hasPermission("exercises.write"));
-  $("#portal-students-section").classList.toggle(
+  const canReadStudents = hasPermission("students.read");
+  const canReadExercises = hasPermission("exercises.read");
+  const canWriteExercises = hasPermission("exercises.write");
+  const canReadPortalUsers = hasPermission("portal_users.read");
+  const canWritePortalUsers = hasPermission("portal_users.write");
+
+  $("#portal-students-card").classList.toggle("hidden", !canReadStudents);
+  $("#exercise-create-section").classList.toggle("hidden", !canWriteExercises);
+  $("#refresh-exercises").classList.toggle("hidden", !canReadExercises);
+  $("#portal-exercises-section").classList.toggle("hidden", !canReadExercises);
+  $("#portal-access-section").classList.toggle(
     "hidden",
-    !hasPermission("students.read") && !hasPermission("exercises.read")
+    !(canReadPortalUsers || canWritePortalUsers)
   );
-  $("#portal-students-card").classList.toggle("hidden", !hasPermission("students.read"));
-  $("#portal-exercises-section").classList.toggle("hidden", !hasPermission("exercises.read"));
-  $("#portal-access-section").classList.toggle("hidden", !hasPermission("portal_users.read"));
-  $("#portal-user-create").classList.toggle("hidden", !hasPermission("portal_users.write"));
+  $("#portal-user-create").classList.toggle("hidden", !canWritePortalUsers);
+  $("#portal-users-list").classList.toggle("hidden", !canReadPortalUsers);
+  $("#portal-users-count").classList.toggle("hidden", !canReadPortalUsers);
 }
 
 function syncCreatePortalUserPermissions() {
@@ -283,6 +336,197 @@ function syncEditorPortalUserPermissions(select) {
   );
 }
 
+function getAvailableScreens() {
+  return Object.entries(screenDefinitions)
+    .filter(([, definition]) => definition.available())
+    .map(([key]) => key);
+}
+
+function ensureActiveScreen() {
+  const availableScreens = getAvailableScreens();
+  if (!availableScreens.includes(state.activeScreen)) {
+    state.activeScreen = availableScreens[0] ?? "dashboard";
+  }
+}
+
+function setActiveScreen(screenKey) {
+  const availableScreens = getAvailableScreens();
+  state.activeScreen = availableScreens.includes(screenKey)
+    ? screenKey
+    : availableScreens[0] ?? "dashboard";
+  syncNavigation();
+  setSidebarOpen(false);
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function renderSummaryRows(container, entries, emptyMessage) {
+  if (!container) {
+    return;
+  }
+
+  if (!entries.length) {
+    container.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+
+  container.innerHTML = entries
+    .map(
+      (entry) => `
+        <div class="summary-row">
+          <span>${escapeHtml(entry.label)}</span>
+          <strong>${escapeHtml(entry.value)}</strong>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderChips(container, values, emptyMessage) {
+  if (!container) {
+    return;
+  }
+
+  if (!values.length) {
+    container.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+
+  container.innerHTML = values.map((value) => `<span class="chip">${escapeHtml(value)}</span>`).join("");
+}
+
+function countBy(items, resolveKey, labels) {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = resolveKey(item);
+    map.set(key, (map.get(key) ?? 0) + 1);
+  });
+
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, total]) => ({
+      label: labels[key] ?? key,
+      value: `${total}`,
+    }));
+}
+
+function renderDashboard() {
+  const currentRole = portalRoleLabels[state.instructor?.role] ?? "--";
+  const permissions = getCurrentPermissions();
+  const canReadStudents = hasPermission("students.read");
+  const canReadExercises = hasPermission("exercises.read");
+  const canReadPortalUsers = hasPermission("portal_users.read");
+
+  $("#dashboard-role-value").textContent = currentRole;
+  $("#dashboard-role-copy").textContent = `${permissions.length} permissao(oes) ativa(s) nesta sessao.`;
+
+  $("#dashboard-students-total").textContent = canReadStudents ? String(state.users.length) : "--";
+  $("#dashboard-students-copy").textContent = canReadStudents
+    ? "Cadastros visiveis no portal."
+    : "Sem permissao para listar alunos.";
+
+  $("#dashboard-exercises-total").textContent = canReadExercises
+    ? String(state.exercises.length)
+    : "--";
+  $("#dashboard-exercises-copy").textContent = canReadExercises
+    ? "Biblioteca disponivel para consulta."
+    : "Sem permissao para ver exercicios.";
+
+  $("#dashboard-access-total").textContent = canReadPortalUsers
+    ? String(state.portalUsers.length)
+    : "--";
+  $("#dashboard-access-copy").textContent = canReadPortalUsers
+    ? "Perfis internos cadastrados."
+    : "Acessos internos restritos.";
+
+  const shortcuts = getAvailableScreens()
+    .filter((screenKey) => screenKey !== "dashboard")
+    .map((screenKey) => ({
+      key: screenKey,
+      title: screenDefinitions[screenKey].title,
+      description: screenDefinitions[screenKey].description,
+    }));
+
+  const shortcutsContainer = $("#dashboard-shortcuts");
+  if (!shortcuts.length) {
+    shortcutsContainer.innerHTML =
+      "<div class='empty-state'>Nenhum modulo adicional liberado para este acesso.</div>";
+  } else {
+    shortcutsContainer.innerHTML = shortcuts
+      .map(
+        (shortcut) => `
+          <button class="shortcut-button" type="button" data-screen-target="${escapeHtml(shortcut.key)}">
+            <strong>${escapeHtml(shortcut.title)}</strong>
+            <span>${escapeHtml(shortcut.description)}</span>
+          </button>
+        `
+      )
+      .join("");
+  }
+
+  renderChips(
+    $("#dashboard-permissions"),
+    permissions.map((permission) => {
+      const label =
+        portalPermissionOptions.find((option) => option.value === permission)?.label ?? permission;
+      return label;
+    }),
+    "Este acesso ainda nao possui permissoes configuradas."
+  );
+
+  if (canReadStudents) {
+    renderSummaryRows(
+      $("#dashboard-objectives"),
+      countBy(state.users, (user) => user.objective, objectiveLabels),
+      "Nenhum aluno cadastrado ainda."
+    );
+    renderSummaryRows(
+      $("#dashboard-environments"),
+      countBy(state.users, (user) => user.trainingEnvironment, environmentLabels),
+      "Nenhum ambiente de treino registrado ainda."
+    );
+  } else {
+    renderSummaryRows(
+      $("#dashboard-objectives"),
+      [],
+      "Voce nao tem permissao para visualizar a distribuicao de alunos."
+    );
+    renderSummaryRows(
+      $("#dashboard-environments"),
+      [],
+      "Voce nao tem permissao para visualizar os ambientes dos alunos."
+    );
+  }
+}
+
+function syncNavigation() {
+  ensureActiveScreen();
+  syncPortalSections();
+
+  const currentScreen = screenDefinitions[state.activeScreen];
+  $("#screen-eyebrow").textContent = currentScreen.eyebrow;
+  $("#screen-title").textContent = currentScreen.title;
+  $("#screen-description").textContent = currentScreen.description;
+
+  document.querySelectorAll("[data-screen-target]").forEach((button) => {
+    const target = button.dataset.screenTarget;
+    const available = screenDefinitions[target]?.available() ?? false;
+    button.classList.toggle("hidden", !available);
+    button.classList.toggle("current", target === state.activeScreen);
+  });
+
+  Object.keys(screenDefinitions).forEach((screenKey) => {
+    const screen = $(`#screen-${screenKey}`);
+    if (!screen) {
+      return;
+    }
+
+    const isVisible = screenKey === state.activeScreen && screenDefinitions[screenKey].available();
+    screen.classList.toggle("hidden", !isVisible);
+  });
+
+  renderDashboard();
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -292,7 +536,12 @@ async function request(path, options = {}) {
     ...options,
   });
 
-  const data = await response.json();
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -329,6 +578,14 @@ function getCompatibleExercises(user, slot, currentExerciseId) {
 
 function renderUsers() {
   const container = $("#students-list");
+  const countBadge = $("#students-count");
+
+  if (!hasPermission("students.read")) {
+    countBadge.textContent = "Acesso restrito";
+    container.innerHTML = "<div class='empty-state'>Voce nao pode visualizar alunos.</div>";
+    return;
+  }
+
   const canEditStudents = hasPermission("students.write");
   const canEditWorkouts = hasPermission("workouts.write");
   const canReplaceWorkoutExercises = canEditWorkouts && hasPermission("exercises.read");
@@ -347,18 +604,19 @@ function renderUsers() {
     )
   );
 
-  $("#students-count").textContent = query
+  countBadge.textContent = query
     ? `${filteredUsers.length} de ${state.users.length} aluno(s)`
     : `${state.users.length} aluno(s)`;
   container.innerHTML = "";
 
   if (!state.users.length) {
-    container.innerHTML = "<p class='muted-dark'>Nenhum usuario cadastrado ainda.</p>";
+    container.innerHTML = "<div class='empty-state'>Nenhum usuario cadastrado ainda.</div>";
     return;
   }
 
   if (!filteredUsers.length) {
-    container.innerHTML = "<p class='muted-dark'>Nenhum aluno encontrado para essa pesquisa.</p>";
+    container.innerHTML =
+      "<div class='empty-state'>Nenhum aluno encontrado para essa pesquisa.</div>";
     return;
   }
 
@@ -371,15 +629,17 @@ function renderUsers() {
         const slotsMarkup = workout.exercises
           .map((slot) => {
             const currentExercise = state.exercises.find((exercise) => exercise.id === slot.exerciseId);
+            const currentName = currentExercise?.name ?? "Exercicio vinculado";
+            const currentEquipment = currentExercise?.equipment ?? "-";
             const options = getCompatibleExercises(user, slot, slot.exerciseId);
 
             if (!canReplaceWorkoutExercises) {
               return `
                 <div class="slot-editor">
                   <div class="slot-copy">
-                    <strong>${escapeHtml(currentExercise?.name ?? "Exercicio nao encontrado")}</strong>
+                    <strong>${escapeHtml(currentName)}</strong>
                     <span>${escapeHtml(groupLabels[slot.muscleGroup] ?? slot.muscleGroup)} | ${escapeHtml(
-                      currentExercise?.equipment ?? "-"
+                      currentEquipment
                     )}</span>
                   </div>
                 </div>
@@ -389,9 +649,9 @@ function renderUsers() {
             return `
               <div class="slot-editor">
                 <div class="slot-copy">
-                  <strong>${escapeHtml(currentExercise?.name ?? "Exercicio nao encontrado")}</strong>
+                  <strong>${escapeHtml(currentName)}</strong>
                   <span>${escapeHtml(groupLabels[slot.muscleGroup] ?? slot.muscleGroup)} | ${escapeHtml(
-                    currentExercise?.equipment ?? "-"
+                    currentEquipment
                   )}</span>
                 </div>
                 <div class="slot-actions">
@@ -419,6 +679,7 @@ function renderUsers() {
                     data-user-id="${escapeHtml(user.id)}"
                     data-workout-id="${escapeHtml(workout.id)}"
                     data-slot-id="${escapeHtml(slot.slotId)}"
+                    type="button"
                   >
                     Trocar
                   </button>
@@ -545,7 +806,7 @@ function renderUsers() {
                   <div class="actions">
                     ${
                       canEditStudents
-                        ? `<button data-action="save-user" data-user-id="${escapeHtml(user.id)}">Salvar cadastro</button>`
+                        ? `<button data-action="save-user" data-user-id="${escapeHtml(user.id)}" type="button">Salvar cadastro</button>`
                         : ""
                     }
                     ${
@@ -555,6 +816,7 @@ function renderUsers() {
                             class="secondary"
                             data-action="recalculate-user-workout"
                             data-user-id="${escapeHtml(user.id)}"
+                            type="button"
                           >
                             Recalcular treino
                           </button>
@@ -585,6 +847,15 @@ function renderUsers() {
 
 function renderExercises() {
   const container = $("#exercises-list");
+  const countBadge = $("#exercises-count");
+
+  if (!hasPermission("exercises.read")) {
+    countBadge.textContent = "Acesso restrito";
+    container.innerHTML =
+      "<div class='empty-state'>Voce pode cadastrar exercicios, mas nao visualizar a biblioteca.</div>";
+    return;
+  }
+
   const canEditExercises = hasPermission("exercises.write");
   const query = normalizeText(state.exerciseQuery);
   const filteredExercises = state.exercises.filter((exercise) =>
@@ -601,19 +872,19 @@ function renderExercises() {
     )
   );
 
-  $("#exercises-count").textContent = query
+  countBadge.textContent = query
     ? `${filteredExercises.length} de ${state.exercises.length} exercicio(s)`
     : `${state.exercises.length} exercicio(s)`;
   container.innerHTML = "";
 
   if (!state.exercises.length) {
-    container.innerHTML = "<p class='muted-dark'>Nenhum exercicio encontrado.</p>";
+    container.innerHTML = "<div class='empty-state'>Nenhum exercicio encontrado.</div>";
     return;
   }
 
   if (!filteredExercises.length) {
     container.innerHTML =
-      "<p class='muted-dark'>Nenhum exercicio encontrado para essa pesquisa.</p>";
+      "<div class='empty-state'>Nenhum exercicio encontrado para essa pesquisa.</div>";
     return;
   }
 
@@ -683,7 +954,7 @@ function renderExercises() {
             ${
               canEditExercises
                 ? `
-                  <button data-action="save-exercise-edit" data-exercise-id="${escapeHtml(exercise.id)}">
+                  <button data-action="save-exercise-edit" data-exercise-id="${escapeHtml(exercise.id)}" type="button">
                     Salvar alteracoes
                   </button>
                 `
@@ -704,9 +975,17 @@ function renderExercises() {
 function renderPortalUsers() {
   const container = $("#portal-users-list");
   const count = $("#portal-users-count");
+  const canReadPortalUsers = hasPermission("portal_users.read");
   const canManagePortalUsers = hasPermission("portal_users.write");
 
   if (!container || !count) {
+    return;
+  }
+
+  if (!canReadPortalUsers) {
+    count.textContent = "Acesso restrito";
+    container.innerHTML =
+      "<div class='empty-state'>Voce nao pode listar os acessos internos do portal.</div>";
     return;
   }
 
@@ -714,7 +993,7 @@ function renderPortalUsers() {
   container.innerHTML = "";
 
   if (!state.portalUsers.length) {
-    container.innerHTML = "<p class='muted-dark'>Nenhum usuario interno cadastrado ainda.</p>";
+    container.innerHTML = "<div class='empty-state'>Nenhum usuario interno cadastrado ainda.</div>";
     return;
   }
 
@@ -784,7 +1063,7 @@ function renderPortalUsers() {
             canEditThisUser
               ? `
                 <div class="actions">
-                  <button data-action="save-portal-user-edit" data-portal-user-id="${escapeHtml(portalUser.id)}">
+                  <button data-action="save-portal-user-edit" data-portal-user-id="${escapeHtml(portalUser.id)}" type="button">
                     Salvar acesso
                   </button>
                 </div>
@@ -800,21 +1079,23 @@ function renderPortalUsers() {
 }
 
 async function loadAll() {
+  const canReadStudents = hasPermission("students.read");
+  const canReadExercises = hasPermission("exercises.read");
+  const canReadPortalUsers = hasPermission("portal_users.read");
+
   const [usersPayload, exercisesPayload, portalUsersPayload] = await Promise.all([
-    hasPermission("students.read") ? request("/api/users") : Promise.resolve({ users: [] }),
-    hasPermission("exercises.read") ? request("/api/exercises") : Promise.resolve({ exercises: [] }),
-    hasPermission("portal_users.read")
-      ? request("/api/portal-users")
-      : Promise.resolve({ portalUsers: [] }),
+    canReadStudents ? request("/api/users") : Promise.resolve({ users: [] }),
+    canReadExercises ? request("/api/exercises") : Promise.resolve({ exercises: [] }),
+    canReadPortalUsers ? request("/api/portal-users") : Promise.resolve({ portalUsers: [] }),
   ]);
   state.users = usersPayload.users ?? [];
   state.exercises = exercisesPayload.exercises ?? [];
   state.portalUsers = portalUsersPayload.portalUsers ?? [];
 
-  syncPortalSections();
   renderUsers();
   renderExercises();
   renderPortalUsers();
+  syncNavigation();
 }
 
 async function loginInstructor() {
@@ -835,6 +1116,7 @@ async function loginInstructor() {
   syncAuthUi();
   $("#portal-login-password").value = "";
   await loadAll();
+  setActiveScreen("dashboard");
   showNotice("Portal autenticado com sucesso.", "success");
 }
 
@@ -848,14 +1130,17 @@ async function logoutInstructor() {
   }
 
   clearSession();
+  resetCollections();
+  state.activeScreen = "dashboard";
+  state.studentQuery = "";
+  state.exerciseQuery = "";
+  $("#students-search").value = "";
+  $("#exercises-search").value = "";
   syncAuthUi();
-  state.portalUsers = [];
-  state.users = [];
-  state.exercises = [];
-  syncPortalSections();
-  $("#portal-users-list").innerHTML = "";
-  $("#students-list").innerHTML = "";
-  $("#exercises-list").innerHTML = "";
+  renderUsers();
+  renderExercises();
+  renderPortalUsers();
+  syncNavigation();
 }
 
 async function saveExercise() {
@@ -892,6 +1177,7 @@ async function saveExercise() {
   $("#exercise-video").value = "";
   $("#exercise-description").value = "";
   await loadAll();
+  setActiveScreen("exercises");
   showNotice("Exercicio cadastrado com sucesso.", "success");
 }
 
@@ -931,6 +1217,7 @@ async function savePortalUser() {
   $("#portal-user-active").checked = true;
   syncCreatePortalUserPermissions();
   await loadAll();
+  setActiveScreen("access");
   showNotice("Acesso do portal criado com sucesso.", "success");
 }
 
@@ -1082,6 +1369,30 @@ $("#portal-user-role").addEventListener("change", () => {
   syncCreatePortalUserPermissions();
 });
 
+$("#sidebar-open").addEventListener("click", () => {
+  setSidebarOpen(true);
+});
+
+$("#sidebar-close").addEventListener("click", () => {
+  setSidebarOpen(false);
+});
+
+$("#sidebar-backdrop").addEventListener("click", () => {
+  setSidebarOpen(false);
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    setSidebarOpen(false);
+  }
+});
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 960) {
+    setSidebarOpen(false);
+  }
+});
+
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLSelectElement)) {
@@ -1094,6 +1405,12 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const navButton = event.target.closest("[data-screen-target]");
+  if (navButton) {
+    setActiveScreen(navButton.dataset.screenTarget);
+    return;
+  }
+
   const button = event.target.closest("button[data-action]");
   if (!button) {
     return;
@@ -1124,13 +1441,21 @@ if (storedSession) {
 }
 
 syncAuthUi();
-syncPortalSections();
 syncCreatePortalUserPermissions();
+renderUsers();
+renderExercises();
+renderPortalUsers();
+syncNavigation();
 
 if (state.session?.token) {
   loadAll().catch((error) => {
     clearSession();
+    resetCollections();
     syncAuthUi();
+    renderUsers();
+    renderExercises();
+    renderPortalUsers();
+    syncNavigation();
     showNotice(error.message, "error");
   });
 }

@@ -11,6 +11,7 @@
   </head>
   <body>
     <div id="notice" class="notice hidden" aria-live="polite"></div>
+
     <section id="auth-gate" class="auth-gate">
       <div class="auth-card">
         <img class="auth-logo" src="./branding/logo-horizontal-dark.png" alt="FatBurn" />
@@ -29,175 +30,302 @@
           </label>
         </div>
         <div class="actions">
-          <button id="portal-login">Entrar no portal</button>
+          <button id="portal-login" type="button">Entrar no portal</button>
         </div>
       </div>
     </section>
 
     <main class="page hidden">
-      <header class="topbar">
-        <div class="brand-shell">
-          <img class="brand-logo-horizontal" src="./branding/logo-horizontal-dark.png" alt="FatBurn" />
-        </div>
-        <div id="portal-session-meta" class="session-meta hidden"></div>
-        <div class="actions">
-          <button id="portal-logout" class="secondary hidden">Sair</button>
-        </div>
-      </header>
-
-      <section id="exercise-create-section" class="grid">
-        <article class="card wide">
-          <h2><span class="section-icon">01</span>Cadastrar exercicio</h2>
-          <div class="form-grid">
-            <label>
-              <span>Nome</span>
-              <input id="exercise-name" type="text" placeholder="Ex.: Remada unilateral" />
-            </label>
-            <label>
-              <span>Grupo muscular</span>
-              <select id="exercise-group"></select>
-            </label>
-            <label>
-              <span>Objetivo</span>
-              <select id="exercise-goal">
-                <option value="geral">Geral</option>
-                <option value="perda_de_peso">Perda de peso</option>
-                <option value="definicao">Definicao</option>
-              </select>
-            </label>
-            <label>
-              <span>Ambiente</span>
-              <select id="exercise-environment">
-                <option value="academia">Academia</option>
-                <option value="casa">Casa</option>
-              </select>
-            </label>
-            <label>
-              <span>Calorias</span>
-              <input id="exercise-calories" type="number" min="1" placeholder="60" />
-            </label>
-            <label>
-              <span>Equipamento</span>
-              <input id="exercise-equipment" type="text" placeholder="Halteres" />
-            </label>
-            <label>
-              <span>Link do video</span>
-              <input id="exercise-video" type="url" placeholder="https://..." />
-            </label>
-            <label class="full">
-              <span>Descricao</span>
-              <textarea
-                id="exercise-description"
-                rows="4"
-                placeholder="Como o exercicio ajuda e o que trabalha"
-              ></textarea>
-            </label>
-          </div>
-          <div class="actions">
-            <button id="save-exercise">Salvar exercicio</button>
-            <button id="refresh-exercises" class="secondary">Recarregar lista</button>
-          </div>
-        </article>
-      </section>
-
-      <section id="portal-access-section" class="grid hidden">
-        <article class="card wide">
-          <div class="section-head">
-            <div>
-              <h2><span class="section-icon">02</span>Acessos do portal</h2>
-              <p class="muted">Crie usuarios internos e defina o que cada um pode acessar.</p>
-            </div>
-            <div class="section-tools">
-              <span id="portal-users-count" class="badge">0 acessos</span>
-            </div>
+      <div class="app-shell">
+        <aside id="portal-sidebar" class="sidebar">
+          <div class="sidebar-head">
+            <img class="sidebar-logo" src="./branding/logo-horizontal-dark.png" alt="FatBurn" />
+            <button
+              id="sidebar-close"
+              class="secondary sidebar-close"
+              type="button"
+              aria-label="Fechar menu"
+            >
+              Fechar
+            </button>
           </div>
 
-          <div id="portal-user-create" class="stack">
-            <article class="item">
-              <h3>Novo usuario do portal</h3>
-              <div class="form-grid compact">
-                <label>
-                  <span>Nome</span>
-                  <input id="portal-user-name" type="text" placeholder="Ex.: Ana Silva" />
-                </label>
-                <label>
-                  <span>Email</span>
-                  <input id="portal-user-email" type="email" placeholder="ana@fatburn.app" />
-                </label>
-                <label>
-                  <span>Senha inicial</span>
-                  <input id="portal-user-password" type="password" placeholder="Minimo 8 caracteres" />
-                </label>
-                <label>
-                  <span>Perfil</span>
-                  <select id="portal-user-role">
-                    <option value="admin">Admin</option>
-                    <option value="instrutor" selected>Instrutor</option>
-                    <option value="visualizador">Visualizador</option>
-                  </select>
-                </label>
-                <label class="full">
-                  <span>Permissoes</span>
-                  <div id="portal-user-permissions" class="permission-grid"></div>
-                </label>
-                <label class="full checkbox-inline">
-                  <input id="portal-user-active" type="checkbox" checked />
-                  <span>Usuario ativo</span>
-                </label>
+          <nav class="sidebar-nav" aria-label="Navegacao principal">
+            <button class="nav-item" data-screen-target="dashboard" type="button">Home</button>
+            <button class="nav-item" data-screen-target="students" type="button">Alunos</button>
+            <button class="nav-item" data-screen-target="exercises" type="button">Exercicios</button>
+            <button class="nav-item" data-screen-target="access" type="button">Acessos</button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <div id="portal-session-meta" class="sidebar-session hidden"></div>
+            <button id="portal-logout" class="secondary hidden" type="button">Sair</button>
+          </div>
+        </aside>
+
+        <button
+          id="sidebar-backdrop"
+          class="sidebar-backdrop hidden"
+          type="button"
+          aria-label="Fechar menu"
+        ></button>
+
+        <section class="workspace">
+          <header class="workspace-topbar">
+            <div class="workspace-title-wrap">
+              <button id="sidebar-open" class="secondary sidebar-open" type="button">Menu</button>
+              <div>
+                <p id="screen-eyebrow" class="eyebrow">Portal FatBurn</p>
+                <h1 id="screen-title">Home</h1>
+                <p id="screen-description" class="muted">
+                  Visao geral do portal, modulos disponiveis e indicadores rapidos.
+                </p>
               </div>
-              <div class="actions">
-                <button id="save-portal-user">Criar acesso</button>
+            </div>
+          </header>
+
+          <section id="screen-dashboard" class="screen">
+            <div class="stats-grid">
+              <article class="stat-card">
+                <span class="stat-label">Alunos</span>
+                <strong id="dashboard-students-total" class="stat-value">--</strong>
+                <p id="dashboard-students-copy" class="muted">Carregando base de alunos.</p>
+              </article>
+
+              <article class="stat-card">
+                <span class="stat-label">Exercicios</span>
+                <strong id="dashboard-exercises-total" class="stat-value">--</strong>
+                <p id="dashboard-exercises-copy" class="muted">Biblioteca central do portal.</p>
+              </article>
+
+              <article class="stat-card">
+                <span class="stat-label">Acessos internos</span>
+                <strong id="dashboard-access-total" class="stat-value">--</strong>
+                <p id="dashboard-access-copy" class="muted">Perfis com acesso ao portal.</p>
+              </article>
+
+              <article class="stat-card">
+                <span class="stat-label">Perfil atual</span>
+                <strong id="dashboard-role-value" class="stat-value">--</strong>
+                <p id="dashboard-role-copy" class="muted">Permissoes ativas desta sessao.</p>
+              </article>
+            </div>
+
+            <div class="dashboard-grid">
+              <article class="card">
+                <div class="section-head">
+                  <div>
+                    <h2>Atalhos</h2>
+                    <p class="muted">Abra rapidamente cada modulo liberado para este acesso.</p>
+                  </div>
+                </div>
+                <div id="dashboard-shortcuts" class="shortcut-grid"></div>
+              </article>
+
+              <article class="card">
+                <div class="section-head">
+                  <div>
+                    <h2>Escopo da sessao</h2>
+                    <p class="muted">Permissoes efetivas do usuario autenticado.</p>
+                  </div>
+                </div>
+                <div id="dashboard-permissions" class="summary-chips"></div>
+              </article>
+
+              <article class="card">
+                <div class="section-head">
+                  <div>
+                    <h2>Alunos por objetivo</h2>
+                    <p class="muted">Distribuicao dos planos cadastrados na base.</p>
+                  </div>
+                </div>
+                <div id="dashboard-objectives" class="summary-list"></div>
+              </article>
+
+              <article class="card">
+                <div class="section-head">
+                  <div>
+                    <h2>Alunos por ambiente</h2>
+                    <p class="muted">Separacao entre casa e academia.</p>
+                  </div>
+                </div>
+                <div id="dashboard-environments" class="summary-list"></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="screen-students" class="screen hidden">
+            <article id="portal-students-card" class="card">
+              <div class="section-head">
+                <div>
+                  <h2><span class="section-icon">01</span>Alunos cadastrados</h2>
+                  <p class="muted">
+                    Edite cadastro, recalcule a ficha e troque exercicios do treino.
+                  </p>
+                </div>
+                <div class="section-tools">
+                  <label class="search-field" for="students-search">
+                    <span class="sr-only">Pesquisar alunos</span>
+                    <input
+                      id="students-search"
+                      type="search"
+                      placeholder="Pesquisar aluno por nome, email ou objetivo"
+                    />
+                  </label>
+                  <span id="students-count" class="badge">0 alunos</span>
+                </div>
               </div>
+              <div id="students-list" class="stack"></div>
             </article>
-          </div>
+          </section>
 
-          <div id="portal-users-list" class="stack"></div>
-        </article>
-      </section>
+          <section id="screen-exercises" class="screen hidden">
+            <div class="screen-stack">
+              <article id="exercise-create-section" class="card">
+                <div class="section-head">
+                  <div>
+                    <h2><span class="section-icon">02</span>Cadastrar exercicio</h2>
+                    <p class="muted">
+                      Registre novos exercicios para alimentar a biblioteca do app.
+                    </p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    <span>Nome</span>
+                    <input id="exercise-name" type="text" placeholder="Ex.: Remada unilateral" />
+                  </label>
+                  <label>
+                    <span>Grupo muscular</span>
+                    <select id="exercise-group"></select>
+                  </label>
+                  <label>
+                    <span>Objetivo</span>
+                    <select id="exercise-goal">
+                      <option value="geral">Geral</option>
+                      <option value="perda_de_peso">Perda de peso</option>
+                      <option value="definicao">Definicao</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Ambiente</span>
+                    <select id="exercise-environment">
+                      <option value="academia">Academia</option>
+                      <option value="casa">Casa</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Calorias</span>
+                    <input id="exercise-calories" type="number" min="1" placeholder="60" />
+                  </label>
+                  <label>
+                    <span>Equipamento</span>
+                    <input id="exercise-equipment" type="text" placeholder="Halteres" />
+                  </label>
+                  <label>
+                    <span>Link do video</span>
+                    <input id="exercise-video" type="url" placeholder="https://..." />
+                  </label>
+                  <label class="full">
+                    <span>Descricao</span>
+                    <textarea
+                      id="exercise-description"
+                      rows="4"
+                      placeholder="Como o exercicio ajuda e o que trabalha"
+                    ></textarea>
+                  </label>
+                </div>
+                <div class="actions">
+                  <button id="save-exercise" type="button">Salvar exercicio</button>
+                  <button id="refresh-exercises" class="secondary" type="button">
+                    Recarregar lista
+                  </button>
+                </div>
+              </article>
 
-      <section id="portal-students-section" class="grid">
-        <article id="portal-students-card" class="card wide">
-          <div class="section-head">
-            <div>
-              <h2><span class="section-icon">03</span>Alunos cadastrados</h2>
-              <p class="muted">Edite cadastro, recalcule a ficha e troque exercicios do treino.</p>
+              <article id="portal-exercises-section" class="card">
+                <div class="section-head">
+                  <div>
+                    <h2><span class="section-icon">03</span>Biblioteca de exercicios</h2>
+                    <p class="muted">Cadastre novos exercicios ou altere os existentes.</p>
+                  </div>
+                  <div class="section-tools">
+                    <label class="search-field" for="exercises-search">
+                      <span class="sr-only">Pesquisar exercicios</span>
+                      <input
+                        id="exercises-search"
+                        type="search"
+                        placeholder="Pesquisar exercicio por nome, grupo ou equipamento"
+                      />
+                    </label>
+                    <span id="exercises-count" class="badge">0 exercicios</span>
+                  </div>
+                </div>
+                <div id="exercises-list" class="stack"></div>
+              </article>
             </div>
-            <div class="section-tools">
-              <label class="search-field" for="students-search">
-                <span class="sr-only">Pesquisar alunos</span>
-                <input
-                  id="students-search"
-                  type="search"
-                  placeholder="Pesquisar aluno por nome, email ou objetivo"
-                />
-              </label>
-              <span id="students-count" class="badge">0 alunos</span>
-            </div>
-          </div>
-          <div id="students-list" class="stack"></div>
-        </article>
+          </section>
 
-        <article id="portal-exercises-section" class="card wide">
-          <div class="section-head">
-            <div>
-              <h2><span class="section-icon">04</span>Biblioteca de exercicios</h2>
-              <p class="muted">Cadastre novos exercicios ou altere os existentes.</p>
-            </div>
-            <div class="section-tools">
-              <label class="search-field" for="exercises-search">
-                <span class="sr-only">Pesquisar exercicios</span>
-                <input
-                  id="exercises-search"
-                  type="search"
-                  placeholder="Pesquisar exercicio por nome, grupo ou equipamento"
-                />
-              </label>
-              <span id="exercises-count" class="badge">0 exercicios</span>
-            </div>
-          </div>
-          <div id="exercises-list" class="stack"></div>
-        </article>
-      </section>
+          <section id="screen-access" class="screen hidden">
+            <article id="portal-access-section" class="card">
+              <div class="section-head">
+                <div>
+                  <h2><span class="section-icon">04</span>Acessos do portal</h2>
+                  <p class="muted">Crie usuarios internos e defina o que cada um pode acessar.</p>
+                </div>
+                <div class="section-tools">
+                  <span id="portal-users-count" class="badge">0 acessos</span>
+                </div>
+              </div>
+
+              <div id="portal-user-create" class="stack">
+                <article class="item">
+                  <h3>Novo usuario do portal</h3>
+                  <div class="form-grid compact">
+                    <label>
+                      <span>Nome</span>
+                      <input id="portal-user-name" type="text" placeholder="Ex.: Ana Silva" />
+                    </label>
+                    <label>
+                      <span>Email</span>
+                      <input id="portal-user-email" type="email" placeholder="ana@fatburn.app" />
+                    </label>
+                    <label>
+                      <span>Senha inicial</span>
+                      <input
+                        id="portal-user-password"
+                        type="password"
+                        placeholder="Minimo 8 caracteres"
+                      />
+                    </label>
+                    <label>
+                      <span>Perfil</span>
+                      <select id="portal-user-role">
+                        <option value="admin">Admin</option>
+                        <option value="instrutor" selected>Instrutor</option>
+                        <option value="visualizador">Visualizador</option>
+                      </select>
+                    </label>
+                    <label class="full">
+                      <span>Permissoes</span>
+                      <div id="portal-user-permissions" class="permission-grid"></div>
+                    </label>
+                    <label class="full checkbox-inline">
+                      <input id="portal-user-active" type="checkbox" checked />
+                      <span>Usuario ativo</span>
+                    </label>
+                  </div>
+                  <div class="actions">
+                    <button id="save-portal-user" type="button">Criar acesso</button>
+                  </div>
+                </article>
+              </div>
+
+              <div id="portal-users-list" class="stack"></div>
+            </article>
+          </section>
+        </section>
+      </div>
     </main>
 
     <script type="module" src="./script.js"></script>
