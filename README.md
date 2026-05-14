@@ -12,7 +12,7 @@ FatBurn/
 ## Estrutura
 
 - `backend/`
-  API Node.js, regras de treino e base SQLite local em `backend/data/`.
+  API Node.js, regras de treino e persistencia em PostgreSQL.
 
 - `portal/`
   Pagina web do instrutor, servida pelo backend.
@@ -26,6 +26,7 @@ Backend:
 
 ```bash
 cd backend
+npm install
 npm run start
 ```
 
@@ -61,9 +62,16 @@ senha: FatBurn@123
 Para producao, substitua por variaveis de ambiente no backend:
 
 ```text
+DATABASE_URL
 FATBURN_ADMIN_EMAIL
 FATBURN_ADMIN_PASSWORD
+PGSSL
 ```
+
+Observacoes:
+
+- `DATABASE_URL` deve apontar para o banco PostgreSQL do ambiente.
+- `PGSSL=true` so e necessario quando a conexao exigir SSL, como em acessos externos ao banco.
 
 ## Teste no celular fisico
 

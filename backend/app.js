@@ -257,19 +257,19 @@ function getRequestToken(request) {
   return token.trim();
 }
 
-function getAuthContext(request) {
+async function getAuthContext(request) {
   const token = getRequestToken(request);
   if (!token) {
     return null;
   }
 
-  const session = findSessionByToken(token);
+  const session = await findSessionByToken(token);
   if (!session) {
     return null;
   }
 
-  const user = session.userId ? findUserRowById(session.userId) : null;
-  const instructor = session.instructorId ? findInstructorRowById(session.instructorId) : null;
+  const user = session.userId ? await findUserRowById(session.userId) : null;
+  const instructor = session.instructorId ? await findInstructorRowById(session.instructorId) : null;
   return {
     token,
     session,
@@ -329,11 +329,11 @@ function requireUserScope(response, authContext, userId) {
   return true;
 }
 
-function requireActiveConsent(response, authContext, userId) {
+async function requireActiveConsent(response, authContext, userId) {
   const sourceUser =
     authContext?.session.role === "user" && authContext.user?.id === userId
       ? authContext.user
-      : findUserRowById(userId);
+      : await findUserRowById(userId);
 
   if (!sourceUser) {
     sendJson(response, 404, { error: "Usuario nao encontrado." });
@@ -448,7 +448,11 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/health" && request.method === "GET") {
-      sendJson(response, 200, { ok: true, db: "sqlite", seededExercises: listExercises().length });
+      sendJson(response, 200, {
+        ok: true,
+        db: "postgres",
+        seededExercises: (await listExercises()).length,
+      });
       return;
     }
 
@@ -470,17 +474,17 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/exercises" && request.method === "GET") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "exercises.read")) {
         return;
       }
 
-      sendJson(response, 200, { exercises: listExercises() });
+      sendJson(response, 200, { exercises: await listExercises() });
       return;
     }
 
     if (pathname === "/api/exercises" && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "exercises.write")) {
         return;
       }
@@ -493,7 +497,7 @@ createServer(async (request, response) => {
         return;
       }
 
-      const exercise = createExercise({
+      const exercise = await createExercise({
         name: payload.name?.trim(),
         muscleGroup: payload.muscleGroup,
         goal: payload.goal,
@@ -504,7 +508,7 @@ createServer(async (request, response) => {
         equipment: payload.equipment?.trim(),
       });
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "instructor",
         actorId: authContext.session.instructorId,
         action: "exercise.create",
@@ -517,7 +521,7 @@ createServer(async (request, response) => {
 
     const exerciseMatch = pathname.match(/^\/api\/exercises\/([^/]+)$/);
     if (exerciseMatch && request.method === "PUT") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "exercises.write")) {
         return;
       }
@@ -530,13 +534,13 @@ createServer(async (request, response) => {
         return;
       }
 
-      const currentExercise = findExerciseById(exerciseMatch[1]);
+      const currentExercise = await findExerciseById(exerciseMatch[1]);
       if (!currentExercise) {
         sendJson(response, 404, { error: "Exercicio nao encontrado." });
         return;
       }
 
-      const exercise = updateExercise(exerciseMatch[1], {
+      const exercise = await updateExercise(exerciseMatch[1], {
         name: payload.name?.trim(),
         muscleGroup: payload.muscleGroup,
         goal: payload.goal,
@@ -547,7 +551,7 @@ createServer(async (request, response) => {
         equipment: payload.equipment?.trim(),
       });
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "instructor",
         actorId: authContext.session.instructorId,
         action: "exercise.update",
@@ -562,7 +566,7 @@ createServer(async (request, response) => {
       const payload = await readBody(request);
       const email = normalizeEmail(payload.email);
       const password = (payload.password ?? "").trim();
-      const user = findUserRowByEmail(email);
+      const user = await findUserRowByEmail(email);
 
       if (!user) {
         sendJson(response, 404, { error: "Usuario nao encontrado." });
@@ -575,13 +579,13 @@ createServer(async (request, response) => {
       }
 
       const token = issueSessionToken();
-      const session = createSession({
+      const session = await createSession({
         token,
         role: "user",
         userId: user.id,
         ttlHours: USER_SESSION_TTL_HOURS,
       });
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "user",
         actorId: user.id,
         action: "auth.login",
@@ -593,7 +597,7 @@ createServer(async (request, response) => {
         role: "user",
         policyVersion: PRIVACY_POLICY_VERSION,
         sensitiveConsentVersion: SENSITIVE_CONSENT_VERSION,
-        bundle: getUserBundle(user.id),
+        bundle: await getUserBundle(user.id),
       });
       return;
     }
@@ -602,7 +606,7 @@ createServer(async (request, response) => {
       const payload = await readBody(request);
       const email = normalizeEmail(payload.email);
       const password = (payload.password ?? "").trim();
-      const instructor = findInstructorRowByEmail(email);
+      const instructor = await findInstructorRowByEmail(email);
 
       if (!instructor) {
         sendJson(response, 404, { error: "Instrutor nao encontrado." });
@@ -620,13 +624,13 @@ createServer(async (request, response) => {
       }
 
       const token = issueSessionToken();
-      const session = createSession({
+      const session = await createSession({
         token,
         role: "instructor",
         instructorId: instructor.id,
         ttlHours: INSTRUCTOR_SESSION_TTL_HOURS,
       });
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "instructor",
         actorId: instructor.id,
         action: "auth.login",
@@ -643,13 +647,13 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/auth/logout" && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireAuthenticated(response, authContext)) {
         return;
       }
 
-      revokeSession(authContext.token);
-      logAuditEvent({
+      await revokeSession(authContext.token);
+      await logAuditEvent({
         actorType: authContext.session.role,
         actorId: authContext.session.userId ?? authContext.session.instructorId,
         action: "auth.logout",
@@ -670,12 +674,12 @@ createServer(async (request, response) => {
       }
 
       const email = normalizeEmail(payload.email);
-      if (findUserRowByEmail(email)) {
+      if (await findUserRowByEmail(email)) {
         sendJson(response, 409, { error: "Ja existe um usuario com esse email." });
         return;
       }
 
-      const bundle = registerUser({
+      const bundle = await registerUser({
         ...payload,
         email,
         age: Number(payload.age),
@@ -685,13 +689,13 @@ createServer(async (request, response) => {
         trainingDaysPerWeek: Number(payload.trainingDaysPerWeek),
       });
       const token = issueSessionToken();
-      const session = createSession({
+      const session = await createSession({
         token,
         role: "user",
         userId: bundle.user.id,
         ttlHours: USER_SESSION_TTL_HOURS,
       });
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "user",
         actorId: bundle.user.id,
         action: "auth.register",
@@ -709,27 +713,27 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/users" && request.method === "GET") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "students.read")) {
         return;
       }
 
-      sendJson(response, 200, { users: listUsers() });
+      sendJson(response, 200, { users: await listUsers() });
       return;
     }
 
     if (pathname === "/api/portal-users" && request.method === "GET") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "portal_users.read")) {
         return;
       }
 
-      sendJson(response, 200, { portalUsers: listInstructors() });
+      sendJson(response, 200, { portalUsers: await listInstructors() });
       return;
     }
 
     if (pathname === "/api/portal-users" && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "portal_users.write")) {
         return;
       }
@@ -742,12 +746,12 @@ createServer(async (request, response) => {
       }
 
       const email = normalizeEmail(payload.email);
-      if (findInstructorRowByEmail(email)) {
+      if (await findInstructorRowByEmail(email)) {
         sendJson(response, 409, { error: "Ja existe um usuario do portal com esse email." });
         return;
       }
 
-      const portalUser = createInstructor({
+      const portalUser = await createInstructor({
         name: payload.name?.trim(),
         email,
         password: payload.password?.trim(),
@@ -756,7 +760,7 @@ createServer(async (request, response) => {
         isActive: payload.isActive !== false,
       });
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "instructor",
         actorId: authContext.session.instructorId,
         action: "portal_user.create",
@@ -769,13 +773,13 @@ createServer(async (request, response) => {
 
     const portalUserMatch = pathname.match(/^\/api\/portal-users\/([^/]+)$/);
     if (portalUserMatch && request.method === "PUT") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requirePortalPermission(response, authContext, "portal_users.write")) {
         return;
       }
 
       const targetId = portalUserMatch[1];
-      const existingPortalUser = findInstructorRowById(targetId);
+      const existingPortalUser = await findInstructorRowById(targetId);
       if (!existingPortalUser) {
         sendJson(response, 404, { error: "Usuario do portal nao encontrado." });
         return;
@@ -789,7 +793,7 @@ createServer(async (request, response) => {
       }
 
       const email = normalizeEmail(payload.email);
-      const duplicate = findInstructorRowByEmail(email);
+      const duplicate = await findInstructorRowByEmail(email);
       if (duplicate && duplicate.id !== targetId) {
         sendJson(response, 409, { error: "Ja existe um usuario do portal com esse email." });
         return;
@@ -811,7 +815,7 @@ createServer(async (request, response) => {
         }
       }
 
-      const portalUser = updateInstructor(targetId, {
+      const portalUser = await updateInstructor(targetId, {
         name: payload.name?.trim(),
         email,
         password: payload.password?.trim(),
@@ -820,7 +824,7 @@ createServer(async (request, response) => {
         isActive: payload.isActive !== false,
       });
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "instructor",
         actorId: authContext.session.instructorId,
         action: "portal_user.update",
@@ -832,7 +836,7 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/privacy/consent" && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireAuthenticated(response, authContext) || authContext.session.role !== "user") {
         if (authContext?.session.role && authContext.session.role !== "user") {
           sendJson(response, 403, { error: "Somente o aluno pode atualizar os proprios consentimentos." });
@@ -848,8 +852,8 @@ createServer(async (request, response) => {
         return;
       }
 
-      const bundle = updateUserConsents(authContext.session.userId, payload);
-      logAuditEvent({
+      const bundle = await updateUserConsents(authContext.session.userId, payload);
+      await logAuditEvent({
         actorType: "user",
         actorId: authContext.session.userId,
         action: "privacy.consent.accepted",
@@ -865,7 +869,7 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/privacy/export" && request.method === "GET") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireAuthenticated(response, authContext) || authContext.session.role !== "user") {
         if (authContext?.session.role && authContext.session.role !== "user") {
           sendJson(response, 403, { error: "Somente o aluno pode exportar os proprios dados." });
@@ -873,19 +877,19 @@ createServer(async (request, response) => {
         return;
       }
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "user",
         actorId: authContext.session.userId,
         action: "privacy.export",
         targetType: "user",
         targetId: authContext.session.userId,
       });
-      sendJson(response, 200, exportUserData(authContext.session.userId));
+      sendJson(response, 200, await exportUserData(authContext.session.userId));
       return;
     }
 
     if (pathname === "/api/account" && request.method === "DELETE") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireAuthenticated(response, authContext) || authContext.session.role !== "user") {
         if (authContext?.session.role && authContext.session.role !== "user") {
           sendJson(response, 403, { error: "Somente o aluno pode excluir a propria conta." });
@@ -893,22 +897,22 @@ createServer(async (request, response) => {
         return;
       }
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: "user",
         actorId: authContext.session.userId,
         action: "privacy.delete_account",
         targetType: "user",
         targetId: authContext.session.userId,
       });
-      deleteUserAccount(authContext.session.userId);
-      revokeSession(authContext.token);
+      await deleteUserAccount(authContext.session.userId);
+      await revokeSession(authContext.token);
       sendJson(response, 200, { ok: true });
       return;
     }
 
     const userMatch = pathname.match(/^\/api\/users\/([^/]+)$/);
     if (userMatch && request.method === "GET") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, userMatch[1])) {
         return;
       }
@@ -916,12 +920,12 @@ createServer(async (request, response) => {
         return;
       }
 
-      sendJson(response, 200, getUserBundle(userMatch[1]));
+      sendJson(response, 200, await getUserBundle(userMatch[1]));
       return;
     }
 
     if (userMatch && request.method === "PUT") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, userMatch[1])) {
         return;
       }
@@ -929,7 +933,7 @@ createServer(async (request, response) => {
         return;
       }
 
-      if (!requireActiveConsent(response, authContext, userMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, userMatch[1]))) {
         return;
       }
 
@@ -942,13 +946,13 @@ createServer(async (request, response) => {
         return;
       }
 
-      const existing = findUserRowByEmail(normalizeEmail(payload.email));
+      const existing = await findUserRowByEmail(normalizeEmail(payload.email));
       if (existing && existing.id !== userId) {
         sendJson(response, 409, { error: "Ja existe um usuario com esse email." });
         return;
       }
 
-      const bundle = updateUser(userId, {
+      const bundle = await updateUser(userId, {
         ...payload,
         email: normalizeEmail(payload.email),
         age: Number(payload.age),
@@ -958,7 +962,7 @@ createServer(async (request, response) => {
         trainingDaysPerWeek: Number(payload.trainingDaysPerWeek),
       });
 
-      logAuditEvent({
+      await logAuditEvent({
         actorType: authContext.session.role,
         actorId: authContext.session.userId ?? authContext.session.instructorId,
         action: authContext.session.role === "instructor" ? "user.update_by_instructor" : "user.update_profile",
@@ -971,58 +975,58 @@ createServer(async (request, response) => {
 
     const recalcMatch = pathname.match(/^\/api\/users\/([^/]+)\/recalculate$/);
     if (recalcMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, recalcMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, recalcMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, recalcMatch[1]))) {
         return;
       }
 
-      recalculateWorkoutPlan(recalcMatch[1]);
-      sendJson(response, 200, getUserBundle(recalcMatch[1]));
+      await recalculateWorkoutPlan(recalcMatch[1]);
+      sendJson(response, 200, await getUserBundle(recalcMatch[1]));
       return;
     }
 
     const weightMatch = pathname.match(/^\/api\/users\/([^/]+)\/weights$/);
     if (weightMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, weightMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "students.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, weightMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, weightMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      upsertWeightEntry(weightMatch[1], Number(payload.weightKg), payload.date);
-      recalculateWorkoutPlan(weightMatch[1]);
-      sendJson(response, 200, getUserBundle(weightMatch[1]));
+      await upsertWeightEntry(weightMatch[1], Number(payload.weightKg), payload.date);
+      await recalculateWorkoutPlan(weightMatch[1]);
+      sendJson(response, 200, await getUserBundle(weightMatch[1]));
       return;
     }
 
     const completionMatch = pathname.match(/^\/api\/users\/([^/]+)\/completions$/);
     if (completionMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, completionMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, completionMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, completionMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      const exercise = findExerciseById(payload.exerciseId);
-      const userBundle = getUserBundle(completionMatch[1]);
+      const exercise = await findExerciseById(payload.exerciseId);
+      const userBundle = await getUserBundle(completionMatch[1]);
       const slot = userBundle.user.workoutPlan
         .find((workout) => workout.id === payload.workoutId)
         ?.exercises.find((item) => item.exerciseId === payload.exerciseId);
@@ -1030,7 +1034,7 @@ createServer(async (request, response) => {
       const completedSetIds = Array.isArray(payload.completedSetIds)
         ? payload.completedSetIds.filter((setId) => setIds.includes(setId))
         : [];
-      updateCompletion(
+      await updateCompletion(
         completionMatch[1],
         payload.date,
         payload.workoutId,
@@ -1040,115 +1044,115 @@ createServer(async (request, response) => {
           : 0,
         completedSetIds
       );
-      sendJson(response, 200, getUserBundle(completionMatch[1]));
+      sendJson(response, 200, await getUserBundle(completionMatch[1]));
       return;
     }
 
     const updateSetMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/set$/);
     if (updateSetMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, updateSetMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, updateSetMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, updateSetMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      updateWorkoutSet(updateSetMatch[1], payload.workoutId, payload.slotId, payload.setId, {
+      await updateWorkoutSet(updateSetMatch[1], payload.workoutId, payload.slotId, payload.setId, {
         repetitions: payload.repetitions,
         load: payload.load,
       });
-      sendJson(response, 200, getUserBundle(updateSetMatch[1]));
+      sendJson(response, 200, await getUserBundle(updateSetMatch[1]));
       return;
     }
 
     const replaceMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/replace$/);
     if (replaceMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, replaceMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, replaceMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, replaceMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      replaceWorkoutExercise(
+      await replaceWorkoutExercise(
         replaceMatch[1],
         payload.workoutId,
         payload.slotId,
         payload.nextExerciseId
       );
-      sendJson(response, 200, getUserBundle(replaceMatch[1]));
+      sendJson(response, 200, await getUserBundle(replaceMatch[1]));
       return;
     }
 
     const startWorkoutMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/start$/);
     if (startWorkoutMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, startWorkoutMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, startWorkoutMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, startWorkoutMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      startWorkoutSession(startWorkoutMatch[1], payload.workoutLabel, payload.date);
-      sendJson(response, 200, getUserBundle(startWorkoutMatch[1]));
+      await startWorkoutSession(startWorkoutMatch[1], payload.workoutLabel, payload.date);
+      sendJson(response, 200, await getUserBundle(startWorkoutMatch[1]));
       return;
     }
 
     const finishWorkoutMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/finish$/);
     if (finishWorkoutMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, finishWorkoutMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, finishWorkoutMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, finishWorkoutMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      finishWorkoutSession(finishWorkoutMatch[1], payload.workoutLabel, payload.date);
-      sendJson(response, 200, getUserBundle(finishWorkoutMatch[1]));
+      await finishWorkoutSession(finishWorkoutMatch[1], payload.workoutLabel, payload.date);
+      sendJson(response, 200, await getUserBundle(finishWorkoutMatch[1]));
       return;
     }
 
     const restartWorkoutMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/restart$/);
     if (restartWorkoutMatch && request.method === "POST") {
-      const authContext = getAuthContext(request);
+      const authContext = await getAuthContext(request);
       if (!requireUserScope(response, authContext, restartWorkoutMatch[1])) {
         return;
       }
       if (authContext?.session.role === "instructor" && !requirePortalPermission(response, authContext, "workouts.write")) {
         return;
       }
-      if (!requireActiveConsent(response, authContext, restartWorkoutMatch[1])) {
+      if (!(await requireActiveConsent(response, authContext, restartWorkoutMatch[1]))) {
         return;
       }
 
       const payload = await readBody(request);
-      restartWorkoutSession(
+      await restartWorkoutSession(
         restartWorkoutMatch[1],
         payload.workoutLabel,
         payload.workoutId,
         payload.date
       );
-      sendJson(response, 200, getUserBundle(restartWorkoutMatch[1]));
+      sendJson(response, 200, await getUserBundle(restartWorkoutMatch[1]));
       return;
     }
 
