@@ -356,7 +356,6 @@ export function hydrateUser(row, exercises) {
     id: row.id,
     name: row.name,
     email: row.email,
-    password: row.password,
     age: row.age,
     sex: row.sex,
     heightCm: row.heightCm,
@@ -371,5 +370,9 @@ export function hydrateUser(row, exercises) {
     bmiClass: getBmiClass(bmi),
     workoutPlan,
     createdAt: row.createdAt,
+    privacyPolicyVersion: row.privacyPolicyVersion ?? null,
+    privacyAcceptedAt: row.privacyAcceptedAt ?? null,
+    sensitiveConsentVersion: row.sensitiveConsentVersion ?? null,
+    sensitiveConsentAcceptedAt: row.sensitiveConsentAcceptedAt ?? null,
   };
 }

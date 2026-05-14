@@ -17,6 +17,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share,
   StatusBar as NativeStatusBar,
   Text,
   TextInput,
@@ -27,17 +28,23 @@ import {
 import { WebView } from "react-native-webview";
 import YoutubePlayer from "react-native-youtube-iframe";
 import {
+  acceptPrivacyConsents,
   API_BASE_URL,
+  AuthenticatedUserSession,
+  deleteMyAccount,
+  exportMyData,
   finishWorkout,
   UserBundle,
   UserPayload,
   checkServerHealth,
   fetchUserBundle,
   loginUser,
+  logoutUser,
   registerUser,
   replaceWorkoutExercise,
   restartWorkout,
   saveDailyWeight,
+  setSessionToken,
   startWorkout,
   toggleExerciseCompletion,
   updateWorkoutSet,
@@ -55,7 +62,7 @@ import { formatDateLabel, getDayKey } from "./src/utils/date";
 import { getObjectiveLabel } from "./src/utils/health";
 import { MUSCLE_GROUP_LABELS } from "./src/utils/workout";
 
-const SESSION_KEY = "@fatburn/current-user-id";
+const SESSION_KEY = "@fatburn/current-session";
 
 const TAB_ITEMS = [
   { key: "dashboard", label: "Resumo", icon: "view-dashboard-outline" },
@@ -124,6 +131,7 @@ type NoticeState = { title: string; message: string; tone: NoticeTone } | null;
 
 type ApiError = Error & { message: string };
 type SetDraftMap = Record<string, { repetitions: string; load: string }>;
+type StoredSession = { token: string; userId: string };
 
 function createEmptyForm(): ProfileFormState {
   return {
@@ -147,7 +155,7 @@ function buildFormFromUser(user: UserProfile): ProfileFormState {
   return {
     name: user.name,
     email: user.email,
-    password: user.password,
+    password: "",
     age: String(user.age),
     sex: user.sex,
     heightCm: String(user.heightCm),
@@ -165,14 +173,17 @@ function normalizeNumber(value: string): number {
   return Number(value.replace(",", "."));
 }
 
-function validateForm(form: ProfileFormState): string | null {
+function validateForm(form: ProfileFormState, options?: { requirePassword?: boolean }): string | null {
   if (!form.name.trim()) return "Informe o nome.";
   if (!form.email.trim() || !form.email.includes("@")) return "Informe um email valido.";
-  if (!form.password.trim() || form.password.trim().length < 4) {
-    return "A senha deve ter pelo menos 4 caracteres.";
+  if (options?.requirePassword && (!form.password.trim() || form.password.trim().length < 8)) {
+    return "A senha deve ter pelo menos 8 caracteres.";
   }
-  if (!Number.isFinite(normalizeNumber(form.age)) || normalizeNumber(form.age) < 12) {
-    return "Informe uma idade valida.";
+  if (!options?.requirePassword && form.password.trim() && form.password.trim().length < 8) {
+    return "A nova senha deve ter pelo menos 8 caracteres.";
+  }
+  if (!Number.isFinite(normalizeNumber(form.age)) || normalizeNumber(form.age) < 18) {
+    return "O cadastro requer usuario com 18 anos ou mais.";
   }
   if (
     !Number.isFinite(normalizeNumber(form.heightCm)) ||
@@ -206,7 +217,7 @@ function formToPayload(form: ProfileFormState): UserPayload {
   return {
     name: form.name.trim(),
     email: form.email.trim().toLowerCase(),
-    password: form.password.trim(),
+    ...(form.password.trim() ? { password: form.password.trim() } : {}),
     age: Math.round(normalizeNumber(form.age)),
     sex: form.sex,
     heightCm: normalizeNumber(form.heightCm),
@@ -463,12 +474,35 @@ function SegmentedSelector<T extends string>({
   );
 }
 
+function ToggleCheck({
+  checked,
+  label,
+  onPress,
+}: {
+  checked: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.checkRow} onPress={onPress}>
+      <View style={[styles.checkBox, checked ? styles.checkBoxActive : null]}>
+        {checked ? (
+          <MaterialCommunityIcons name="check" size={16} color="#1A1A1A" />
+        ) : null}
+      </View>
+      <Text style={styles.checkLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function UserFormFields({
   form,
   onChange,
+  passwordLabel,
 }: {
   form: ProfileFormState;
   onChange: <K extends keyof ProfileFormState>(field: K, value: ProfileFormState[K]) => void;
+  passwordLabel?: string;
 }) {
   return (
     <>
@@ -481,7 +515,7 @@ function UserFormFields({
         onChangeText={(value) => onChange("email", value)}
       />
       <LabeledInput
-        label="Senha"
+        label={passwordLabel ?? "Senha"}
         value={form.password}
         secureTextEntry
         onChangeText={(value) => onChange("password", value)}
@@ -573,6 +607,8 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [registerForm, setRegisterForm] = useState<ProfileFormState>(createEmptyForm());
+  const [acceptedPrivacyPolicy, setAcceptedPrivacyPolicy] = useState(false);
+  const [acceptedSensitiveConsent, setAcceptedSensitiveConsent] = useState(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(createEmptyForm());
   const [weightInput, setWeightInput] = useState("");
   const [replacementContext, setReplacementContext] = useState<ReplacementContext>(null);
@@ -581,6 +617,8 @@ export default function App() {
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
+  const [privacyNoticeOpen, setPrivacyNoticeOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const authScrollRef = useRef<ScrollView | null>(null);
   const appScrollRef = useRef<ScrollView | null>(null);
 
@@ -630,19 +668,37 @@ export default function App() {
     }
   }
 
+  function readStoredSession(rawValue: string | null): StoredSession | null {
+    if (!rawValue) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(rawValue) as StoredSession;
+      if (!parsed?.token || !parsed?.userId) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
   async function restoreStoredSession() {
-    const storedUserId = await AsyncStorage.getItem(SESSION_KEY);
-    if (!storedUserId) {
+    const storedSession = readStoredSession(await AsyncStorage.getItem(SESSION_KEY));
+    if (!storedSession) {
       return;
     }
 
     try {
-      const nextBundle = await fetchUserBundle(storedUserId);
+      setSessionToken(storedSession.token);
+      const nextBundle = await fetchUserBundle(storedSession.userId);
       setBundle(nextBundle);
       setProfileForm(buildFormFromUser(nextBundle.user));
       setWeightInput(String(nextBundle.user.weightKg));
       setSessionError("");
     } catch (error) {
+      setSessionToken(null);
       await AsyncStorage.removeItem(SESSION_KEY);
       setBundle(null);
       setSessionError((error as ApiError).message ?? "Nao foi possivel restaurar a sessao.");
@@ -657,6 +713,7 @@ export default function App() {
     if (connected) {
       await restoreStoredSession();
     } else {
+      setSessionToken(null);
       await AsyncStorage.removeItem(SESSION_KEY);
       setBundle(null);
     }
@@ -667,7 +724,30 @@ export default function App() {
 
   async function persistBundle(nextBundle: UserBundle) {
     setBundle(nextBundle);
-    await AsyncStorage.setItem(SESSION_KEY, nextBundle.user.id);
+    const storedSession = readStoredSession(await AsyncStorage.getItem(SESSION_KEY));
+    if (storedSession) {
+      await AsyncStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ ...storedSession, userId: nextBundle.user.id })
+      );
+    }
+  }
+
+  async function persistAuthenticatedSession(nextSession: AuthenticatedUserSession) {
+    setSessionToken(nextSession.token);
+    setBundle(nextSession.bundle);
+    await AsyncStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        token: nextSession.token,
+        userId: nextSession.bundle.user.id,
+      } satisfies StoredSession)
+    );
+  }
+
+  async function clearStoredSession() {
+    setSessionToken(null);
+    await AsyncStorage.removeItem(SESSION_KEY);
   }
 
   async function handleLogin() {
@@ -678,8 +758,8 @@ export default function App() {
 
     setBusy(true);
     try {
-      const nextBundle = await loginUser(loginEmail.trim(), loginPassword.trim());
-      await persistBundle(nextBundle);
+      const nextSession = await loginUser(loginEmail.trim(), loginPassword.trim());
+      await persistAuthenticatedSession(nextSession);
       setActiveTab("dashboard");
       setLoginPassword("");
       setSessionError("");
@@ -695,17 +775,32 @@ export default function App() {
   }
 
   async function handleRegister() {
-    const validationError = validateForm(registerForm);
+    const validationError = validateForm(registerForm, { requirePassword: true });
     if (validationError) {
       setNotice({ title: "Cadastro", message: validationError, tone: "error" });
       return;
     }
 
+    if (!acceptedPrivacyPolicy || !acceptedSensitiveConsent) {
+      setNotice({
+        title: "Privacidade",
+        message: "Aceite o aviso de privacidade e o tratamento de dados de saude para continuar.",
+        tone: "error",
+      });
+      return;
+    }
+
     setBusy(true);
     try {
-      const nextBundle = await registerUser(formToPayload(registerForm));
-      await persistBundle(nextBundle);
+      const nextSession = await registerUser({
+        ...formToPayload(registerForm),
+        acceptedPrivacyPolicy,
+        acceptedSensitiveDataConsent: acceptedSensitiveConsent,
+      });
+      await persistAuthenticatedSession(nextSession);
       setRegisterForm(createEmptyForm());
+      setAcceptedPrivacyPolicy(false);
+      setAcceptedSensitiveConsent(false);
       setActiveTab("dashboard");
       setAuthMode("login");
       setSessionError("");
@@ -721,7 +816,12 @@ export default function App() {
   }
 
   async function handleLogout() {
-    await AsyncStorage.removeItem(SESSION_KEY);
+    try {
+      await logoutUser();
+    } catch {
+      // Mantem logout local mesmo se a sessao ja tiver expirado no servidor.
+    }
+    await clearStoredSession();
     setBundle(null);
     setLoginEmail("");
     setLoginPassword("");
@@ -747,6 +847,7 @@ export default function App() {
       await persistBundle(nextBundle);
       setSessionError("");
       setProfileEditorOpen(false);
+      setProfileForm((current) => ({ ...current, password: "" }));
       setNotice({
         title: "Perfil atualizado",
         message: "Cadastro salvo e treino recalculado.",
@@ -755,6 +856,69 @@ export default function App() {
     } catch (error) {
       setNotice({
         title: "Erro ao salvar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAcceptPrivacyConsent() {
+    setBusy(true);
+    try {
+      const response = await acceptPrivacyConsents();
+      await persistBundle(response.bundle);
+      setNotice({
+        title: "Privacidade atualizada",
+        message: "Consentimentos registrados. Voce ja pode usar o app normalmente.",
+        tone: "success",
+      });
+    } catch (error) {
+      setNotice({
+        title: "Nao foi possivel registrar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleExportPrivacyData() {
+    setBusy(true);
+    try {
+      const payload = await exportMyData();
+      await Share.share({
+        title: "Exportacao de dados FatBurn",
+        message: JSON.stringify(payload, null, 2),
+      });
+    } catch (error) {
+      setNotice({
+        title: "Exportacao",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setBusy(true);
+    try {
+      await deleteMyAccount();
+      await clearStoredSession();
+      setBundle(null);
+      setDeleteConfirmOpen(false);
+      setNotice({
+        title: "Conta excluida",
+        message: "Seus dados foram removidos do aplicativo atual.",
+        tone: "success",
+      });
+    } catch (error) {
+      setNotice({
+        title: "Erro ao excluir conta",
         message: (error as ApiError).message,
         tone: "error",
       });
@@ -1029,6 +1193,102 @@ export default function App() {
     );
   }
 
+  function renderPrivacyNoticeModal() {
+    const consentInfo = bundle?.user.consents;
+    const policyVersion = consentInfo?.privacyPolicyVersion ?? "2026.05";
+    const sensitiveVersion = consentInfo?.sensitiveConsentVersion ?? "2026.05";
+
+    return (
+      <Modal
+        animationType="slide"
+        transparent
+        visible={privacyNoticeOpen}
+        onRequestClose={() => setPrivacyNoticeOpen(false)}
+      >
+        <View style={styles.dialogOverlay}>
+          <View style={[styles.dialogCard, styles.privacyDialogCard]}>
+            <Text style={styles.dialogTitle}>Aviso de privacidade</Text>
+            <ScrollView style={styles.privacyDialogScroll}>
+              <Text style={styles.dialogText}>
+                Controlador: FatBurn. Este app trata dados cadastrais e dados de saude usados para
+                montar treino, calcular IMC e acompanhar evolucao fisica.
+              </Text>
+              <Text style={styles.dialogText}>
+                Finalidades: autenticar sua conta, montar e recalcular sua ficha, registrar peso,
+                calorias, series realizadas e disponibilizar gestao ao instrutor autorizado.
+              </Text>
+              <Text style={styles.dialogText}>
+                Dados tratados: nome, email, idade, sexo biologico, altura, peso, meta,
+                restricoes, ambiente de treino, frequencia, nivel, historico de peso e treino.
+              </Text>
+              <Text style={styles.dialogText}>
+                Seus direitos: acessar, corrigir, exportar e excluir os dados pelo proprio app. Ao
+                revogar o tratamento sensivel, o uso do app deixa de ser viavel para a finalidade
+                principal de treino e acompanhamento.
+              </Text>
+              <Text style={styles.infoNote}>Versao da politica: {policyVersion}</Text>
+              <Text style={styles.infoNote}>Versao do consentimento sensivel: {sensitiveVersion}</Text>
+            </ScrollView>
+            <View style={styles.dialogActions}>
+              <ActionButton label="Fechar" onPress={() => setPrivacyNoticeOpen(false)} compact />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  function renderConsentGate() {
+    if (!bundle || bundle.user.consents.accepted) {
+      return null;
+    }
+
+    return (
+      <SafeAreaView style={[styles.safeArea, { paddingTop: ANDROID_TOP_OFFSET }]}>
+        <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
+        <ScrollView contentContainerStyle={styles.authScreen}>
+          <View style={styles.authHeroPanel}>
+            <BrandWordmark centered />
+          </View>
+          <View style={styles.authCard}>
+            <Text style={styles.sectionTitle}>Privacidade e dados sensiveis</Text>
+            <Text style={styles.cardBody}>
+              Para continuar usando o FatBurn, registre o aceite do aviso de privacidade e do
+              tratamento de dados de saude usados para calculo de IMC, treino e acompanhamento.
+            </Text>
+            <View style={styles.stackedActions}>
+              <ActionButton
+                label="Ler aviso de privacidade"
+                onPress={() => setPrivacyNoticeOpen(true)}
+                secondary
+              />
+              <ActionButton
+                label="Aceitar e continuar"
+                onPress={() => void handleAcceptPrivacyConsent()}
+                disabled={busy}
+              />
+              <ActionButton
+                label="Exportar meus dados"
+                onPress={() => void handleExportPrivacyData()}
+                secondary
+                disabled={busy}
+              />
+              <ActionButton
+                label="Excluir conta"
+                onPress={() => setDeleteConfirmOpen(true)}
+                secondary
+                disabled={busy}
+              />
+              <ActionButton label="Sair da conta" onPress={() => void handleLogout()} secondary />
+            </View>
+          </View>
+        </ScrollView>
+        {renderPrivacyNoticeModal()}
+        {renderNoticeModal()}
+      </SafeAreaView>
+    );
+  }
+
   if (!fontsLoaded || booting) {
     return (
       <SafeAreaView style={[styles.loadingScreen, { paddingTop: ANDROID_TOP_OFFSET }]}>
@@ -1114,7 +1374,26 @@ export default function App() {
               </>
             ) : (
               <>
-                <UserFormFields form={registerForm} onChange={updateRegisterForm} />
+                <UserFormFields
+                  form={registerForm}
+                  onChange={updateRegisterForm}
+                  passwordLabel="Senha"
+                />
+                <View style={styles.cardInset}>
+                  <ToggleCheck
+                    checked={acceptedPrivacyPolicy}
+                    label="Li e aceito o aviso de privacidade."
+                    onPress={() => setAcceptedPrivacyPolicy((current) => !current)}
+                  />
+                  <ToggleCheck
+                    checked={acceptedSensitiveConsent}
+                    label="Autorizo o tratamento de dados de saude para treino e acompanhamento."
+                    onPress={() => setAcceptedSensitiveConsent((current) => !current)}
+                  />
+                  <Pressable style={styles.inlineAction} onPress={() => setPrivacyNoticeOpen(true)}>
+                    <Text style={styles.inlineActionText}>Ler aviso completo</Text>
+                  </Pressable>
+                </View>
                 <View style={[styles.buttonRow, styles.buttonRowCentered]}>
                   <ActionButton
                     label="Cadastrar e montar treino"
@@ -1129,9 +1408,14 @@ export default function App() {
             )}
           </View>
         </ScrollView>
+        {renderPrivacyNoticeModal()}
         {renderNoticeModal()}
       </SafeAreaView>
     );
+  }
+
+  if (!bundle.user.consents.accepted) {
+    return renderConsentGate();
   }
 
   const { user, exercises, weightEntries, completionEntries, workoutStatuses } = bundle;
@@ -1746,7 +2030,13 @@ export default function App() {
             </Pressable>
           </View>
 
-          {profileEditorOpen ? <UserFormFields form={profileForm} onChange={updateProfileForm} /> : null}
+          {profileEditorOpen ? (
+            <UserFormFields
+              form={profileForm}
+              onChange={updateProfileForm}
+              passwordLabel="Nova senha (opcional)"
+            />
+          ) : null}
 
           {profileEditorOpen ? (
             <View style={styles.buttonRow}>
@@ -1759,6 +2049,45 @@ export default function App() {
           ) : null}
           <View style={styles.buttonRow}>
             <ActionButton label="Sair da conta" onPress={() => void handleLogout()} secondary disabled={busy} />
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Privacidade e dados</Text>
+          <View style={styles.labelValue}>
+            <Text style={styles.labelValueLabel}>Politica aceita em</Text>
+            <Text style={styles.labelValueValue}>
+              {user.consents.privacyAcceptedAt
+                ? formatDateLabel(user.consents.privacyAcceptedAt.slice(0, 10))
+                : "Pendente"}
+            </Text>
+          </View>
+          <View style={styles.labelValue}>
+            <Text style={styles.labelValueLabel}>Consentimento sensivel</Text>
+            <Text style={styles.labelValueValue}>
+              {user.consents.sensitiveConsentAcceptedAt
+                ? formatDateLabel(user.consents.sensitiveConsentAcceptedAt.slice(0, 10))
+                : "Pendente"}
+            </Text>
+          </View>
+          <View style={styles.stackedActions}>
+            <ActionButton
+              label="Ler aviso de privacidade"
+              onPress={() => setPrivacyNoticeOpen(true)}
+              secondary
+            />
+            <ActionButton
+              label="Exportar meus dados"
+              onPress={() => void handleExportPrivacyData()}
+              secondary
+              disabled={busy}
+            />
+            <ActionButton
+              label="Excluir conta"
+              onPress={() => setDeleteConfirmOpen(true)}
+              secondary
+              disabled={busy}
+            />
           </View>
         </View>
 
@@ -1968,6 +2297,38 @@ export default function App() {
         </View>
       </Modal>
 
+      <Modal
+        animationType="fade"
+        transparent
+        visible={deleteConfirmOpen}
+        onRequestClose={() => setDeleteConfirmOpen(false)}
+      >
+        <View style={styles.dialogOverlay}>
+          <View style={[styles.dialogCard, styles.dialogCardError]}>
+            <Text style={styles.dialogTitle}>Excluir conta</Text>
+            <Text style={styles.dialogText}>
+              Esta acao remove seu cadastro, pesagens, historico de treino e sessoes ativas deste
+              ambiente.
+            </Text>
+            <View style={styles.dialogActions}>
+              <ActionButton
+                label="Cancelar"
+                onPress={() => setDeleteConfirmOpen(false)}
+                secondary
+                compact
+              />
+              <ActionButton
+                label="Excluir agora"
+                onPress={() => void handleDeleteAccount()}
+                compact
+                disabled={busy}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {renderPrivacyNoticeModal()}
       {renderNoticeModal()}
     </SafeAreaView>
   );

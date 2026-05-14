@@ -80,6 +80,15 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLOR.border,
   },
+  cardInset: {
+    marginTop: 4,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLOR.border,
+    backgroundColor: COLOR.surfaceRaised,
+    gap: 12,
+  },
   authSwitch: {
     alignSelf: "center",
     marginTop: 10,
@@ -580,6 +589,36 @@ export const styles = StyleSheet.create({
     borderColor: COLOR.border,
     fontFamily: "SpaceGrotesk_400Regular",
   },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  checkBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: COLOR.borderStrong,
+    backgroundColor: COLOR.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkBoxActive: {
+    backgroundColor: COLOR.orange,
+    borderColor: COLOR.orange,
+  },
+  checkLabel: {
+    flex: 1,
+    color: COLOR.muted,
+    lineHeight: 21,
+    fontFamily: "SpaceGrotesk_400Regular",
+  },
+  stackedActions: {
+    marginTop: 12,
+    gap: 10,
+  },
   exerciseItem: {
     marginTop: 14,
     padding: 14,
@@ -1066,6 +1105,10 @@ export const styles = StyleSheet.create({
   dialogCardSuccess: {
     borderColor: "rgba(255,106,0,0.18)",
   },
+  privacyDialogCard: {
+    maxWidth: 420,
+    maxHeight: "76%",
+  },
   dialogTitle: {
     color: COLOR.white,
     fontSize: 22,
@@ -1080,5 +1123,12 @@ export const styles = StyleSheet.create({
   },
   dialogActions: {
     marginTop: 18,
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  privacyDialogScroll: {
+    maxHeight: 320,
+    marginTop: 8,
   },
 });

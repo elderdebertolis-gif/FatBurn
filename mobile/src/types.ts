@@ -54,7 +54,6 @@ export type UserProfile = {
   id: string;
   name: string;
   email: string;
-  password: string;
   age: number;
   sex: BiologicalSex;
   heightCm: number;
@@ -69,6 +68,13 @@ export type UserProfile = {
   bmiClass: string;
   workoutPlan: WorkoutDay[];
   createdAt: string;
+  consents: {
+    privacyPolicyVersion: string;
+    privacyAcceptedAt: string | null;
+    sensitiveConsentVersion: string;
+    sensitiveConsentAcceptedAt: string | null;
+    accepted: boolean;
+  };
 };
 
 export type WeightEntry = {

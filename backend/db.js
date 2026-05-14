@@ -4,6 +4,14 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { seedExercises } from "./catalog.js";
 import {
+  SENSITIVE_CONSENT_VERSION,
+  PRIVACY_POLICY_VERSION,
+  hashPassword,
+  hashToken,
+  needsPasswordMigration,
+  sanitizeUserProfile,
+} from "./security.js";
+import {
   buildWorkoutPlan,
   calculateBmi,
   createReplacementSlot,
@@ -51,6 +59,10 @@ db.exec(`
     level TEXT NOT NULL,
     restrictions TEXT,
     custom_workout_plan TEXT,
+    privacy_policy_version TEXT,
+    privacy_policy_accepted_at TEXT,
+    sensitive_consent_version TEXT,
+    sensitive_consent_accepted_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -95,12 +107,60 @@ db.exec(`
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_workout_status_user_week_label
     ON workout_status_entries(user_id, week_key, workout_label);
+
+  CREATE TABLE IF NOT EXISTS instructors (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    role TEXT NOT NULL,
+    user_id TEXT,
+    instructor_id TEXT,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT,
+    last_seen_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(instructor_id) REFERENCES instructors(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_role_user ON sessions(role, user_id, instructor_id);
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    actor_type TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT,
+    metadata_json TEXT,
+    created_at TEXT NOT NULL
+  );
 `);
 
-const completionColumns = db.prepare("PRAGMA table_info(completion_entries)").all();
-if (!completionColumns.some((column) => column.name === "completed_sets")) {
-  db.exec("ALTER TABLE completion_entries ADD COLUMN completed_sets TEXT");
+function ensureColumn(tableName, columnName, ddl) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${ddl}`);
+  }
 }
+
+ensureColumn("completion_entries", "completed_sets", "completed_sets TEXT");
+ensureColumn("users", "privacy_policy_version", "privacy_policy_version TEXT");
+ensureColumn("users", "privacy_policy_accepted_at", "privacy_policy_accepted_at TEXT");
+ensureColumn("users", "sensitive_consent_version", "sensitive_consent_version TEXT");
+ensureColumn(
+  "users",
+  "sensitive_consent_accepted_at",
+  "sensitive_consent_accepted_at TEXT"
+);
 
 const insertExercise = db.prepare(`
   INSERT INTO exercises (
@@ -202,7 +262,7 @@ const mapUserRow = (row) => ({
   id: row.id,
   name: row.name,
   email: row.email,
-  password: row.password,
+  passwordHash: row.password,
   age: row.age,
   sex: row.sex,
   heightCm: row.height_cm,
@@ -214,9 +274,84 @@ const mapUserRow = (row) => ({
   level: row.level,
   restrictions: row.restrictions ?? "",
   customWorkoutPlan: row.custom_workout_plan,
+  privacyPolicyVersion: row.privacy_policy_version ?? null,
+  privacyAcceptedAt: row.privacy_policy_accepted_at ?? null,
+  sensitiveConsentVersion: row.sensitive_consent_version ?? null,
+  sensitiveConsentAcceptedAt: row.sensitive_consent_accepted_at ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
+
+const mapInstructorRow = (row) => ({
+  id: row.id,
+  name: row.name,
+  email: row.email,
+  passwordHash: row.password_hash,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+function migrateLegacyPasswords() {
+  const legacyUsers = db.prepare("SELECT id, password FROM users").all();
+
+  for (const row of legacyUsers) {
+    if (!needsPasswordMigration(row.password)) {
+      continue;
+    }
+
+    db.prepare("UPDATE users SET password = ?, updated_at = ? WHERE id = ?").run(
+      hashPassword(row.password),
+      new Date().toISOString(),
+      row.id
+    );
+  }
+
+  const legacyInstructors = db.prepare("SELECT id, password_hash FROM instructors").all();
+
+  for (const row of legacyInstructors) {
+    if (!needsPasswordMigration(row.password_hash)) {
+      continue;
+    }
+
+    db.prepare("UPDATE instructors SET password_hash = ?, updated_at = ? WHERE id = ?").run(
+      hashPassword(row.password_hash),
+      new Date().toISOString(),
+      row.id
+    );
+  }
+}
+
+function ensureDefaultInstructor() {
+  const email = String(process.env.FATBURN_ADMIN_EMAIL ?? "admin@fatburn.app")
+    .trim()
+    .toLowerCase();
+  const password = String(process.env.FATBURN_ADMIN_PASSWORD ?? "FatBurn@123").trim();
+  const existing = db
+    .prepare("SELECT * FROM instructors WHERE lower(email) = lower(?)")
+    .get(email);
+
+  if (existing) {
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  db.prepare(
+    `
+    INSERT INTO instructors (id, name, email, password_hash, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `
+  ).run(
+    generateId("instructor"),
+    "Instrutor FatBurn",
+    email,
+    hashPassword(password),
+    timestamp,
+    timestamp
+  );
+}
+
+migrateLegacyPasswords();
+ensureDefaultInstructor();
 
 function padDatePart(value) {
   return String(value).padStart(2, "0");
@@ -461,6 +596,120 @@ export function findUserRowById(id) {
   return row ? mapUserRow(row) : null;
 }
 
+export function findInstructorRowByEmail(email) {
+  const row = db
+    .prepare("SELECT * FROM instructors WHERE lower(email) = lower(?)")
+    .get(email);
+  return row ? mapInstructorRow(row) : null;
+}
+
+export function createSession(payload) {
+  const id = generateId("session");
+  const token = payload.token;
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + payload.ttlHours * 60 * 60 * 1000).toISOString();
+
+  db.prepare(
+    `
+    INSERT INTO sessions (
+      id, role, user_id, instructor_id, token_hash, created_at, expires_at, revoked_at, last_seen_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `
+  ).run(
+    id,
+    payload.role,
+    payload.userId ?? null,
+    payload.instructorId ?? null,
+    hashToken(token),
+    createdAt,
+    expiresAt,
+    null,
+    createdAt
+  );
+
+  return {
+    id,
+    token,
+    role: payload.role,
+    userId: payload.userId ?? null,
+    instructorId: payload.instructorId ?? null,
+    createdAt,
+    expiresAt,
+  };
+}
+
+export function findSessionByToken(token) {
+  if (!token) {
+    return null;
+  }
+
+  const row = db
+    .prepare(
+      `
+      SELECT * FROM sessions
+      WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
+    `
+    )
+    .get(hashToken(token), new Date().toISOString());
+
+  if (!row) {
+    return null;
+  }
+
+  db.prepare("UPDATE sessions SET last_seen_at = ? WHERE id = ?").run(
+    new Date().toISOString(),
+    row.id
+  );
+
+  return {
+    id: row.id,
+    role: row.role,
+    userId: row.user_id ?? null,
+    instructorId: row.instructor_id ?? null,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    lastSeenAt: row.last_seen_at ?? null,
+  };
+}
+
+export function revokeSession(token) {
+  if (!token) {
+    return;
+  }
+
+  db.prepare("UPDATE sessions SET revoked_at = ? WHERE token_hash = ?").run(
+    new Date().toISOString(),
+    hashToken(token)
+  );
+}
+
+export function revokeSessionsForUser(userId) {
+  db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").run(
+    new Date().toISOString(),
+    userId
+  );
+}
+
+export function logAuditEvent(payload) {
+  db.prepare(
+    `
+    INSERT INTO audit_logs (
+      id, actor_type, actor_id, action, target_type, target_id, metadata_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `
+  ).run(
+    generateId("audit"),
+    payload.actorType,
+    payload.actorId,
+    payload.action,
+    payload.targetType,
+    payload.targetId ?? null,
+    payload.metadata ? JSON.stringify(payload.metadata) : null,
+    new Date().toISOString()
+  );
+}
+
 function setUserWorkoutPlan(userId, workoutPlan) {
   db.prepare("UPDATE users SET custom_workout_plan = ?, updated_at = ? WHERE id = ?").run(
     JSON.stringify(workoutPlan),
@@ -507,17 +756,21 @@ migrateLegacyWorkoutPlans();
 export function registerUser(payload) {
   const id = generateId("user");
   const timestamp = new Date().toISOString();
+  const acceptedPrivacyAt = payload.acceptedPrivacyPolicy ? timestamp : null;
+  const acceptedSensitiveConsentAt = payload.acceptedSensitiveDataConsent ? timestamp : null;
 
   db.prepare(`
     INSERT INTO users (
       id, name, email, password, age, sex, height_cm, weight_kg, target_weight_kg, objective,
-      training_environment, training_days_per_week, level, restrictions, custom_workout_plan, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      training_environment, training_days_per_week, level, restrictions, custom_workout_plan,
+      privacy_policy_version, privacy_policy_accepted_at, sensitive_consent_version, sensitive_consent_accepted_at,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     payload.name,
     payload.email.toLowerCase(),
-    payload.password,
+    hashPassword(payload.password),
     payload.age,
     payload.sex,
     payload.heightCm,
@@ -529,6 +782,10 @@ export function registerUser(payload) {
     payload.level,
     payload.restrictions ?? "",
     null,
+    PRIVACY_POLICY_VERSION,
+    acceptedPrivacyAt,
+    SENSITIVE_CONSENT_VERSION,
+    acceptedSensitiveConsentAt,
     timestamp,
     timestamp
   );
@@ -555,6 +812,11 @@ export function registerUser(payload) {
 }
 
 export function updateUser(userId, payload) {
+  const userRow = findUserRowById(userId);
+  const nextPasswordHash = payload.password?.trim()
+    ? hashPassword(payload.password.trim())
+    : userRow.passwordHash;
+
   db.prepare(`
     UPDATE users SET
       name = ?,
@@ -575,7 +837,7 @@ export function updateUser(userId, payload) {
   `).run(
     payload.name,
     payload.email.toLowerCase(),
-    payload.password,
+    nextPasswordHash,
     payload.age,
     payload.sex,
     payload.heightCm,
@@ -776,7 +1038,7 @@ export function listUsers() {
   return db
     .prepare("SELECT * FROM users ORDER BY created_at DESC")
     .all()
-    .map((row) => hydrateUser(mapUserRow(row), exercises));
+    .map((row) => sanitizeUserProfile(hydrateUser(mapUserRow(row), exercises)));
 }
 
 export function upsertWeightEntry(userId, weightKg, date) {
@@ -889,10 +1151,86 @@ export function listCompletionEntries(userId) {
     }));
 }
 
+export function updateUserConsents(userId, payload) {
+  const timestamp = new Date().toISOString();
+
+  db.prepare(
+    `
+    UPDATE users
+    SET
+      privacy_policy_version = ?,
+      privacy_policy_accepted_at = ?,
+      sensitive_consent_version = ?,
+      sensitive_consent_accepted_at = ?,
+      updated_at = ?
+    WHERE id = ?
+  `
+  ).run(
+    PRIVACY_POLICY_VERSION,
+    payload.acceptedPrivacyPolicy ? timestamp : null,
+    SENSITIVE_CONSENT_VERSION,
+    payload.acceptedSensitiveDataConsent ? timestamp : null,
+    timestamp,
+    userId
+  );
+
+  return getUserBundle(userId);
+}
+
+export function exportUserData(userId) {
+  const bundle = getUserBundle(userId);
+  const auditLogs = db
+    .prepare(
+      `
+      SELECT * FROM audit_logs
+      WHERE target_id = ? OR actor_id = ?
+      ORDER BY created_at DESC
+    `
+    )
+    .all(userId, userId)
+    .map((row) => ({
+      id: row.id,
+      actorType: row.actor_type,
+      actorId: row.actor_id,
+      action: row.action,
+      targetType: row.target_type,
+      targetId: row.target_id ?? null,
+      metadata: row.metadata_json ? JSON.parse(row.metadata_json) : null,
+      createdAt: row.created_at,
+    }));
+
+  return {
+    exportedAt: new Date().toISOString(),
+    policyVersion: PRIVACY_POLICY_VERSION,
+    user: bundle.user,
+    exercises: bundle.exercises,
+    weightEntries: bundle.weightEntries,
+    completionEntries: bundle.completionEntries,
+    workoutStatuses: bundle.workoutStatuses,
+    auditLogs,
+  };
+}
+
+export function deleteUserAccount(userId) {
+  db.exec("BEGIN");
+
+  try {
+    db.prepare("DELETE FROM completion_entries WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM weight_entries WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM workout_status_entries WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 export function getUserBundle(userId) {
   const userRow = findUserRowById(userId);
   const exercises = listExercises();
-  const user = hydrateUser(userRow, exercises);
+  const user = sanitizeUserProfile(hydrateUser(userRow, exercises));
 
   return {
     user,

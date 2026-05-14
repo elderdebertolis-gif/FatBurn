@@ -4,23 +4,39 @@ import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createExercise,
+  createSession,
+  deleteUserAccount,
+  exportUserData,
   finishWorkoutSession,
   findExerciseById,
+  findInstructorRowByEmail,
+  findSessionByToken,
   findUserRowByEmail,
+  findUserRowById,
   getUserBundle,
+  logAuditEvent,
   listUsers,
   listExercises,
   recalculateWorkoutPlan,
   registerUser,
+  revokeSession,
   restartWorkoutSession,
   replaceWorkoutExercise,
   startWorkoutSession,
   updateCompletion,
+  updateUserConsents,
   updateExercise,
   updateWorkoutSet,
   updateUser,
   upsertWeightEntry,
 } from "./db.js";
+import {
+  PRIVACY_POLICY_VERSION,
+  SENSITIVE_CONSENT_VERSION,
+  buildConsentSnapshot,
+  issueSessionToken,
+  verifyPassword,
+} from "./security.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,6 +44,8 @@ const portalDir = normalize(join(__dirname, "..", "portal"));
 const brandingDir = normalize(join(__dirname, "..", "mobile", "assets", "branding"));
 const port = Number(process.env.PORT) || 3030;
 const host = "0.0.0.0";
+const USER_SESSION_TTL_HOURS = 24 * 14;
+const INSTRUCTOR_SESSION_TTL_HOURS = 12;
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -40,12 +58,18 @@ const contentTypes = {
   ".svg": "image/svg+xml; charset=utf-8",
 };
 
+function buildCorsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    ...buildCorsHeaders(),
   });
   response.end(JSON.stringify(payload));
 }
@@ -53,9 +77,7 @@ function sendJson(response, statusCode, payload) {
 function sendText(response, statusCode, text) {
   response.writeHead(statusCode, {
     "Content-Type": "text/plain; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    ...buildCorsHeaders(),
   });
   response.end(text);
 }
@@ -63,9 +85,7 @@ function sendText(response, statusCode, text) {
 function sendHtml(response, statusCode, html) {
   response.writeHead(statusCode, {
     "Content-Type": "text/html; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    ...buildCorsHeaders(),
   });
   response.end(html);
 }
@@ -83,7 +103,7 @@ function normalizeEmail(value = "") {
   return value.trim().toLowerCase();
 }
 
-function validateUserPayload(payload) {
+function validateRegisterPayload(payload) {
   const required = [
     "name",
     "email",
@@ -103,6 +123,50 @@ function validateUserPayload(payload) {
     if (payload[field] === undefined || payload[field] === null || payload[field] === "") {
       return `Campo obrigatorio ausente: ${field}`;
     }
+  }
+
+  if (!payload.acceptedPrivacyPolicy || !payload.acceptedSensitiveDataConsent) {
+    return "Aceite o aviso de privacidade e o tratamento de dados de saude para continuar.";
+  }
+
+  if ((payload.password ?? "").trim().length < 8) {
+    return "A senha deve ter pelo menos 8 caracteres.";
+  }
+
+  if (Number(payload.age) < 18) {
+    return "O cadastro requer usuario com 18 anos ou mais.";
+  }
+
+  return null;
+}
+
+function validateUpdatePayload(payload) {
+  const required = [
+    "name",
+    "email",
+    "age",
+    "sex",
+    "heightCm",
+    "weightKg",
+    "targetWeightKg",
+    "objective",
+    "trainingEnvironment",
+    "trainingDaysPerWeek",
+    "level",
+  ];
+
+  for (const field of required) {
+    if (payload[field] === undefined || payload[field] === null || payload[field] === "") {
+      return `Campo obrigatorio ausente: ${field}`;
+    }
+  }
+
+  if (payload.password && payload.password.trim().length > 0 && payload.password.trim().length < 8) {
+    return "A nova senha deve ter pelo menos 8 caracteres.";
+  }
+
+  if (Number(payload.age) < 18) {
+    return "O cadastro requer usuario com 18 anos ou mais.";
   }
 
   return null;
@@ -155,6 +219,95 @@ function extractYouTubeVideoId(videoUrl = "") {
   }
 
   return null;
+}
+
+function getRequestToken(request) {
+  const header = request.headers.authorization ?? "";
+  const [scheme, token] = header.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) {
+    return null;
+  }
+  return token.trim();
+}
+
+function getAuthContext(request) {
+  const token = getRequestToken(request);
+  if (!token) {
+    return null;
+  }
+
+  const session = findSessionByToken(token);
+  if (!session) {
+    return null;
+  }
+
+  const user = session.userId ? findUserRowById(session.userId) : null;
+  return {
+    token,
+    session,
+    user,
+  };
+}
+
+function requireAuthenticated(response, authContext) {
+  if (!authContext) {
+    sendJson(response, 401, { error: "Sessao invalida ou expirada." });
+    return false;
+  }
+  return true;
+}
+
+function requireInstructor(response, authContext) {
+  if (!requireAuthenticated(response, authContext)) {
+    return false;
+  }
+
+  if (authContext.session.role !== "instructor") {
+    sendJson(response, 403, { error: "Acesso restrito ao portal do instrutor." });
+    return false;
+  }
+
+  return true;
+}
+
+function requireUserScope(response, authContext, userId) {
+  if (!requireAuthenticated(response, authContext)) {
+    return false;
+  }
+
+  if (authContext.session.role === "instructor") {
+    return true;
+  }
+
+  if (authContext.session.userId !== userId) {
+    sendJson(response, 403, { error: "Voce nao pode acessar dados de outro usuario." });
+    return false;
+  }
+
+  return true;
+}
+
+function requireActiveConsent(response, authContext, userId) {
+  const sourceUser =
+    authContext?.session.role === "user" && authContext.user?.id === userId
+      ? authContext.user
+      : findUserRowById(userId);
+
+  if (!sourceUser) {
+    sendJson(response, 404, { error: "Usuario nao encontrado." });
+    return false;
+  }
+
+  if (!buildConsentSnapshot(sourceUser).accepted) {
+    sendJson(response, 403, {
+      error: "Aceite o aviso de privacidade e o tratamento de dados sensiveis antes de continuar.",
+      code: "CONSENT_REQUIRED",
+      policyVersion: PRIVACY_POLICY_VERSION,
+    });
+    return false;
+  }
+
+  return true;
 }
 
 function renderVideoEmbedPage(videoUrl, pageOrigin) {
@@ -275,11 +428,21 @@ createServer(async (request, response) => {
     }
 
     if (pathname === "/api/exercises" && request.method === "GET") {
+      const authContext = getAuthContext(request);
+      if (!requireInstructor(response, authContext)) {
+        return;
+      }
+
       sendJson(response, 200, { exercises: listExercises() });
       return;
     }
 
     if (pathname === "/api/exercises" && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireInstructor(response, authContext)) {
+        return;
+      }
+
       const payload = await readBody(request);
       const validationError = validateExercisePayload(payload);
 
@@ -298,12 +461,25 @@ createServer(async (request, response) => {
         description: payload.description?.trim(),
         equipment: payload.equipment?.trim(),
       });
+
+      logAuditEvent({
+        actorType: "instructor",
+        actorId: authContext.session.instructorId,
+        action: "exercise.create",
+        targetType: "exercise",
+        targetId: exercise.id,
+      });
       sendJson(response, 201, { exercise });
       return;
     }
 
     const exerciseMatch = pathname.match(/^\/api\/exercises\/([^/]+)$/);
     if (exerciseMatch && request.method === "PUT") {
+      const authContext = getAuthContext(request);
+      if (!requireInstructor(response, authContext)) {
+        return;
+      }
+
       const payload = await readBody(request);
       const validationError = validateExercisePayload(payload);
 
@@ -328,6 +504,14 @@ createServer(async (request, response) => {
         description: payload.description?.trim(),
         equipment: payload.equipment?.trim(),
       });
+
+      logAuditEvent({
+        actorType: "instructor",
+        actorId: authContext.session.instructorId,
+        action: "exercise.update",
+        targetType: "exercise",
+        targetId: exercise.id,
+      });
       sendJson(response, 200, { exercise });
       return;
     }
@@ -343,18 +527,98 @@ createServer(async (request, response) => {
         return;
       }
 
-      if (user.password !== password) {
+      if (!verifyPassword(password, user.passwordHash)) {
         sendJson(response, 401, { error: "Senha invalida." });
         return;
       }
 
-      sendJson(response, 200, getUserBundle(user.id));
+      const token = issueSessionToken();
+      const session = createSession({
+        token,
+        role: "user",
+        userId: user.id,
+        ttlHours: USER_SESSION_TTL_HOURS,
+      });
+      logAuditEvent({
+        actorType: "user",
+        actorId: user.id,
+        action: "auth.login",
+        targetType: "session",
+        targetId: session.id,
+      });
+      sendJson(response, 200, {
+        token,
+        role: "user",
+        policyVersion: PRIVACY_POLICY_VERSION,
+        sensitiveConsentVersion: SENSITIVE_CONSENT_VERSION,
+        bundle: getUserBundle(user.id),
+      });
+      return;
+    }
+
+    if (pathname === "/api/auth/instructor/login" && request.method === "POST") {
+      const payload = await readBody(request);
+      const email = normalizeEmail(payload.email);
+      const password = (payload.password ?? "").trim();
+      const instructor = findInstructorRowByEmail(email);
+
+      if (!instructor) {
+        sendJson(response, 404, { error: "Instrutor nao encontrado." });
+        return;
+      }
+
+      if (!verifyPassword(password, instructor.passwordHash)) {
+        sendJson(response, 401, { error: "Senha invalida." });
+        return;
+      }
+
+      const token = issueSessionToken();
+      const session = createSession({
+        token,
+        role: "instructor",
+        instructorId: instructor.id,
+        ttlHours: INSTRUCTOR_SESSION_TTL_HOURS,
+      });
+      logAuditEvent({
+        actorType: "instructor",
+        actorId: instructor.id,
+        action: "auth.login",
+        targetType: "session",
+        targetId: session.id,
+      });
+      sendJson(response, 200, {
+        token,
+        role: "instructor",
+        instructor: {
+          id: instructor.id,
+          name: instructor.name,
+          email: instructor.email,
+        },
+      });
+      return;
+    }
+
+    if (pathname === "/api/auth/logout" && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireAuthenticated(response, authContext)) {
+        return;
+      }
+
+      revokeSession(authContext.token);
+      logAuditEvent({
+        actorType: authContext.session.role,
+        actorId: authContext.session.userId ?? authContext.session.instructorId,
+        action: "auth.logout",
+        targetType: "session",
+        targetId: authContext.session.id,
+      });
+      sendJson(response, 200, { ok: true });
       return;
     }
 
     if (pathname === "/api/auth/register" && request.method === "POST") {
       const payload = await readBody(request);
-      const validationError = validateUserPayload(payload);
+      const validationError = validateRegisterPayload(payload);
 
       if (validationError) {
         sendJson(response, 400, { error: validationError });
@@ -376,25 +640,139 @@ createServer(async (request, response) => {
         targetWeightKg: Number(payload.targetWeightKg),
         trainingDaysPerWeek: Number(payload.trainingDaysPerWeek),
       });
-      sendJson(response, 201, bundle);
+      const token = issueSessionToken();
+      const session = createSession({
+        token,
+        role: "user",
+        userId: bundle.user.id,
+        ttlHours: USER_SESSION_TTL_HOURS,
+      });
+      logAuditEvent({
+        actorType: "user",
+        actorId: bundle.user.id,
+        action: "auth.register",
+        targetType: "session",
+        targetId: session.id,
+      });
+      sendJson(response, 201, {
+        token,
+        role: "user",
+        policyVersion: PRIVACY_POLICY_VERSION,
+        sensitiveConsentVersion: SENSITIVE_CONSENT_VERSION,
+        bundle,
+      });
       return;
     }
 
     if (pathname === "/api/users" && request.method === "GET") {
+      const authContext = getAuthContext(request);
+      if (!requireInstructor(response, authContext)) {
+        return;
+      }
+
       sendJson(response, 200, { users: listUsers(), exercises: listExercises() });
+      return;
+    }
+
+    if (pathname === "/api/privacy/consent" && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireAuthenticated(response, authContext) || authContext.session.role !== "user") {
+        if (authContext?.session.role && authContext.session.role !== "user") {
+          sendJson(response, 403, { error: "Somente o aluno pode atualizar os proprios consentimentos." });
+        }
+        return;
+      }
+
+      const payload = await readBody(request);
+      if (!payload.acceptedPrivacyPolicy || !payload.acceptedSensitiveDataConsent) {
+        sendJson(response, 400, {
+          error: "Os dois consentimentos sao obrigatorios para utilizar a plataforma.",
+        });
+        return;
+      }
+
+      const bundle = updateUserConsents(authContext.session.userId, payload);
+      logAuditEvent({
+        actorType: "user",
+        actorId: authContext.session.userId,
+        action: "privacy.consent.accepted",
+        targetType: "user",
+        targetId: authContext.session.userId,
+      });
+      sendJson(response, 200, {
+        policyVersion: PRIVACY_POLICY_VERSION,
+        sensitiveConsentVersion: SENSITIVE_CONSENT_VERSION,
+        bundle,
+      });
+      return;
+    }
+
+    if (pathname === "/api/privacy/export" && request.method === "GET") {
+      const authContext = getAuthContext(request);
+      if (!requireAuthenticated(response, authContext) || authContext.session.role !== "user") {
+        if (authContext?.session.role && authContext.session.role !== "user") {
+          sendJson(response, 403, { error: "Somente o aluno pode exportar os proprios dados." });
+        }
+        return;
+      }
+
+      logAuditEvent({
+        actorType: "user",
+        actorId: authContext.session.userId,
+        action: "privacy.export",
+        targetType: "user",
+        targetId: authContext.session.userId,
+      });
+      sendJson(response, 200, exportUserData(authContext.session.userId));
+      return;
+    }
+
+    if (pathname === "/api/account" && request.method === "DELETE") {
+      const authContext = getAuthContext(request);
+      if (!requireAuthenticated(response, authContext) || authContext.session.role !== "user") {
+        if (authContext?.session.role && authContext.session.role !== "user") {
+          sendJson(response, 403, { error: "Somente o aluno pode excluir a propria conta." });
+        }
+        return;
+      }
+
+      logAuditEvent({
+        actorType: "user",
+        actorId: authContext.session.userId,
+        action: "privacy.delete_account",
+        targetType: "user",
+        targetId: authContext.session.userId,
+      });
+      deleteUserAccount(authContext.session.userId);
+      revokeSession(authContext.token);
+      sendJson(response, 200, { ok: true });
       return;
     }
 
     const userMatch = pathname.match(/^\/api\/users\/([^/]+)$/);
     if (userMatch && request.method === "GET") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, userMatch[1])) {
+        return;
+      }
+
       sendJson(response, 200, getUserBundle(userMatch[1]));
       return;
     }
 
     if (userMatch && request.method === "PUT") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, userMatch[1])) {
+        return;
+      }
+
+      if (!requireActiveConsent(response, authContext, userMatch[1])) {
+        return;
+      }
+
       const userId = userMatch[1];
       const payload = await readBody(request);
-      const validationError = validateUserPayload(payload);
+      const validationError = validateUpdatePayload(payload);
 
       if (validationError) {
         sendJson(response, 400, { error: validationError });
@@ -416,12 +794,28 @@ createServer(async (request, response) => {
         targetWeightKg: Number(payload.targetWeightKg),
         trainingDaysPerWeek: Number(payload.trainingDaysPerWeek),
       });
+
+      logAuditEvent({
+        actorType: authContext.session.role,
+        actorId: authContext.session.userId ?? authContext.session.instructorId,
+        action: authContext.session.role === "instructor" ? "user.update_by_instructor" : "user.update_profile",
+        targetType: "user",
+        targetId: userId,
+      });
       sendJson(response, 200, bundle);
       return;
     }
 
     const recalcMatch = pathname.match(/^\/api\/users\/([^/]+)\/recalculate$/);
     if (recalcMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, recalcMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, recalcMatch[1])) {
+        return;
+      }
+
       recalculateWorkoutPlan(recalcMatch[1]);
       sendJson(response, 200, getUserBundle(recalcMatch[1]));
       return;
@@ -429,6 +823,14 @@ createServer(async (request, response) => {
 
     const weightMatch = pathname.match(/^\/api\/users\/([^/]+)\/weights$/);
     if (weightMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, weightMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, weightMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       upsertWeightEntry(weightMatch[1], Number(payload.weightKg), payload.date);
       recalculateWorkoutPlan(weightMatch[1]);
@@ -438,6 +840,14 @@ createServer(async (request, response) => {
 
     const completionMatch = pathname.match(/^\/api\/users\/([^/]+)\/completions$/);
     if (completionMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, completionMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, completionMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       const exercise = findExerciseById(payload.exerciseId);
       const userBundle = getUserBundle(completionMatch[1]);
@@ -464,6 +874,14 @@ createServer(async (request, response) => {
 
     const updateSetMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/set$/);
     if (updateSetMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, updateSetMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, updateSetMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       updateWorkoutSet(updateSetMatch[1], payload.workoutId, payload.slotId, payload.setId, {
         repetitions: payload.repetitions,
@@ -475,6 +893,14 @@ createServer(async (request, response) => {
 
     const replaceMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/replace$/);
     if (replaceMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, replaceMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, replaceMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       replaceWorkoutExercise(
         replaceMatch[1],
@@ -488,6 +914,14 @@ createServer(async (request, response) => {
 
     const startWorkoutMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/start$/);
     if (startWorkoutMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, startWorkoutMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, startWorkoutMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       startWorkoutSession(startWorkoutMatch[1], payload.workoutLabel, payload.date);
       sendJson(response, 200, getUserBundle(startWorkoutMatch[1]));
@@ -496,6 +930,14 @@ createServer(async (request, response) => {
 
     const finishWorkoutMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/finish$/);
     if (finishWorkoutMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, finishWorkoutMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, finishWorkoutMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       finishWorkoutSession(finishWorkoutMatch[1], payload.workoutLabel, payload.date);
       sendJson(response, 200, getUserBundle(finishWorkoutMatch[1]));
@@ -504,6 +946,14 @@ createServer(async (request, response) => {
 
     const restartWorkoutMatch = pathname.match(/^\/api\/users\/([^/]+)\/workouts\/restart$/);
     if (restartWorkoutMatch && request.method === "POST") {
+      const authContext = getAuthContext(request);
+      if (!requireUserScope(response, authContext, restartWorkoutMatch[1])) {
+        return;
+      }
+      if (!requireActiveConsent(response, authContext, restartWorkoutMatch[1])) {
+        return;
+      }
+
       const payload = await readBody(request);
       restartWorkoutSession(
         restartWorkoutMatch[1],

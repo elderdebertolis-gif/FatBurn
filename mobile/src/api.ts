@@ -10,6 +10,7 @@ const defaultBaseUrl = "https://fatburn-backend.onrender.com";
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? defaultBaseUrl;
 const REQUEST_TIMEOUT_MS = 15000;
+let sessionToken: string | null = null;
 
 export type UserBundle = {
   user: UserProfile;
@@ -22,7 +23,7 @@ export type UserBundle = {
 export type UserPayload = {
   name: string;
   email: string;
-  password: string;
+  password?: string;
   age: number;
   sex: UserProfile["sex"];
   heightCm: number;
@@ -33,7 +34,41 @@ export type UserPayload = {
   trainingDaysPerWeek: number;
   level: UserProfile["level"];
   restrictions: string;
+  acceptedPrivacyPolicy?: boolean;
+  acceptedSensitiveDataConsent?: boolean;
 };
+
+export type AuthenticatedUserSession = {
+  token: string;
+  role: "user";
+  policyVersion: string;
+  sensitiveConsentVersion: string;
+  bundle: UserBundle;
+};
+
+export type PrivacyExportPayload = {
+  exportedAt: string;
+  policyVersion: string;
+  user: UserProfile;
+  exercises: Exercise[];
+  weightEntries: WeightEntry[];
+  completionEntries: CompletionEntry[];
+  workoutStatuses: WorkoutStatus[];
+  auditLogs: Array<{
+    id: string;
+    actorType: string;
+    actorId: string;
+    action: string;
+    targetType: string;
+    targetId: string | null;
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+  }>;
+};
+
+export function setSessionToken(token: string | null) {
+  sessionToken = token;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
@@ -43,6 +78,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       headers: {
         "Content-Type": "application/json",
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
         ...(init?.headers ?? {}),
       },
       ...init,
@@ -87,17 +123,23 @@ export async function checkServerHealth(): Promise<{ ok: boolean; db: string }> 
 export async function loginUser(
   email: string,
   password: string
-): Promise<UserBundle> {
+): Promise<AuthenticatedUserSession> {
   return request("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
-export async function registerUser(payload: UserPayload): Promise<UserBundle> {
+export async function registerUser(payload: UserPayload): Promise<AuthenticatedUserSession> {
   return request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function logoutUser(): Promise<{ ok: boolean }> {
+  return request("/api/auth/logout", {
+    method: "POST",
   });
 }
 
@@ -202,5 +244,25 @@ export async function restartWorkout(
   return request(`/api/users/${userId}/workouts/restart`, {
     method: "POST",
     body: JSON.stringify({ workoutId, workoutLabel, date }),
+  });
+}
+
+export async function acceptPrivacyConsents(): Promise<AuthenticatedUserSession | { bundle: UserBundle }> {
+  return request("/api/privacy/consent", {
+    method: "POST",
+    body: JSON.stringify({
+      acceptedPrivacyPolicy: true,
+      acceptedSensitiveDataConsent: true,
+    }),
+  });
+}
+
+export async function exportMyData(): Promise<PrivacyExportPayload> {
+  return request("/api/privacy/export");
+}
+
+export async function deleteMyAccount(): Promise<{ ok: boolean }> {
+  return request("/api/account", {
+    method: "DELETE",
   });
 }

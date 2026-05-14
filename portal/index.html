@@ -11,10 +11,36 @@
   </head>
   <body>
     <div id="notice" class="notice hidden" aria-live="polite"></div>
-    <main class="page">
+    <section id="auth-gate" class="auth-gate">
+      <div class="auth-card">
+        <img class="auth-logo" src="./branding/logo-horizontal-dark.png" alt="FatBurn" />
+        <h1>Portal do instrutor</h1>
+        <p class="muted">
+          Acesso restrito para gestao de alunos, treinos e biblioteca de exercicios.
+        </p>
+        <div class="form-grid single">
+          <label>
+            <span>Email</span>
+            <input id="portal-login-email" type="email" placeholder="instrutor@fatburn.app" />
+          </label>
+          <label>
+            <span>Senha</span>
+            <input id="portal-login-password" type="password" placeholder="********" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="portal-login">Entrar no portal</button>
+        </div>
+      </div>
+    </section>
+
+    <main class="page hidden">
       <header class="topbar">
         <div class="brand-shell">
           <img class="brand-logo-horizontal" src="./branding/logo-horizontal-dark.png" alt="FatBurn" />
+        </div>
+        <div class="actions">
+          <button id="portal-logout" class="secondary hidden">Sair</button>
         </div>
       </header>
 

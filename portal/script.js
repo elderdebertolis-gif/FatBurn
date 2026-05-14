@@ -55,11 +55,15 @@ const groupLabels = Object.fromEntries(groups.map((group) => [group.value, group
 const $ = (selector) => document.querySelector(selector);
 
 const state = {
+  session: null,
+  instructor: null,
   users: [],
   exercises: [],
   studentQuery: "",
   exerciseQuery: "",
 };
+
+const SESSION_STORAGE_KEY = "fatburn.portal.session";
 
 function showNotice(message, tone = "info") {
   const container = $("#notice");
@@ -115,15 +119,70 @@ function matchesQuery(parts, query) {
 
 const API_BASE_URL = "https://fatburn-backend.onrender.com";
 
+function readStoredSession() {
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed?.token) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession(sessionPayload) {
+  state.session = { token: sessionPayload.token, role: sessionPayload.role };
+  state.instructor = sessionPayload.instructor ?? null;
+  window.localStorage.setItem(
+    SESSION_STORAGE_KEY,
+    JSON.stringify({
+      token: sessionPayload.token,
+      role: sessionPayload.role,
+      instructor: sessionPayload.instructor ?? null,
+    })
+  );
+}
+
+function clearSession() {
+  state.session = null;
+  state.instructor = null;
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function syncAuthUi() {
+  const gate = $("#auth-gate");
+  const page = $(".page");
+  const logoutButton = $("#portal-logout");
+  const loggedIn = Boolean(state.session?.token);
+
+  gate.classList.toggle("hidden", loggedIn);
+  page.classList.toggle("hidden", !loggedIn);
+  logoutButton.classList.toggle("hidden", !loggedIn);
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(state.session?.token ? { Authorization: `Bearer ${state.session.token}` } : {}),
+    },
     ...options,
   });
 
   const data = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearSession();
+      syncAuthUi();
+    }
     throw new Error(data.error ?? "Falha ao carregar dados");
   }
 
@@ -286,8 +345,8 @@ function renderUsers() {
                 <input data-field="email" type="email" value="${escapeHtml(user.email)}" />
               </label>
               <label>
-                <span>Senha</span>
-                <input data-field="password" type="text" value="${escapeHtml(user.password)}" />
+                <span>Nova senha temporaria</span>
+                <input data-field="password" type="password" value="" placeholder="Opcional" />
               </label>
               <label>
                 <span>Idade</span>
@@ -499,6 +558,44 @@ async function loadAll() {
   renderExercises();
 }
 
+async function loginInstructor() {
+  const email = $("#portal-login-email").value.trim().toLowerCase();
+  const password = $("#portal-login-password").value.trim();
+
+  if (!email || !password) {
+    showNotice("Informe email e senha do instrutor.", "error");
+    return;
+  }
+
+  const payload = await request("/api/auth/instructor/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  persistSession(payload);
+  syncAuthUi();
+  $("#portal-login-password").value = "";
+  await loadAll();
+  showNotice("Portal autenticado com sucesso.", "success");
+}
+
+async function logoutInstructor() {
+  try {
+    await request("/api/auth/logout", {
+      method: "POST",
+    });
+  } catch {
+    // A limpeza local continua mesmo se a sessao ja tiver expirado no servidor.
+  }
+
+  clearSession();
+  syncAuthUi();
+  state.users = [];
+  state.exercises = [];
+  $("#students-list").innerHTML = "";
+  $("#exercises-list").innerHTML = "";
+}
+
 async function saveExercise() {
   const payload = {
     name: $("#exercise-name").value.trim(),
@@ -570,16 +667,19 @@ async function saveUser(button) {
   }
 
   const raw = readEditorFields(editor);
+  const payload = {
+    ...raw,
+    age: Number(raw.age),
+    heightCm: Number(raw.heightCm),
+    weightKg: Number(raw.weightKg),
+    targetWeightKg: Number(raw.targetWeightKg),
+    trainingDaysPerWeek: Number(raw.trainingDaysPerWeek),
+    ...(raw.password?.trim() ? { password: raw.password.trim() } : {}),
+  };
+
   await request(`/api/users/${userId}`, {
     method: "PUT",
-    body: JSON.stringify({
-      ...raw,
-      age: Number(raw.age),
-      heightCm: Number(raw.heightCm),
-      weightKg: Number(raw.weightKg),
-      targetWeightKg: Number(raw.targetWeightKg),
-      trainingDaysPerWeek: Number(raw.trainingDaysPerWeek),
-    }),
+    body: JSON.stringify(payload),
   });
 
   await loadAll();
@@ -635,6 +735,14 @@ $("#save-exercise").addEventListener("click", () => {
   saveExercise().catch((error) => showNotice(error.message, "error"));
 });
 
+$("#portal-login").addEventListener("click", () => {
+  loginInstructor().catch((error) => showNotice(error.message, "error"));
+});
+
+$("#portal-logout").addEventListener("click", () => {
+  logoutInstructor().catch((error) => showNotice(error.message, "error"));
+});
+
 $("#students-search").addEventListener("input", (event) => {
   state.studentQuery = event.target.value;
   renderUsers();
@@ -668,6 +776,18 @@ document.addEventListener("click", (event) => {
   handler().catch((error) => showNotice(error.message, "error"));
 });
 
-loadAll().catch((error) => {
-  showNotice(error.message, "error");
-});
+const storedSession = readStoredSession();
+if (storedSession) {
+  state.session = { token: storedSession.token, role: storedSession.role ?? "instructor" };
+  state.instructor = storedSession.instructor ?? null;
+}
+
+syncAuthUi();
+
+if (state.session?.token) {
+  loadAll().catch((error) => {
+    clearSession();
+    syncAuthUi();
+    showNotice(error.message, "error");
+  });
+}
