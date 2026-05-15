@@ -126,9 +126,12 @@ const state = {
 
 const SESSION_STORAGE_KEY = "fatburn.portal.session";
 const API_BASE_URL = "https://fatburn-backend.onrender.com";
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
 const loadingState = {
   depth: 0,
 };
+let autoRefreshTimer = null;
+let autoRefreshInFlight = false;
 
 function showNotice(message, tone = "info") {
   const container = $("#notice");
@@ -217,6 +220,7 @@ function clearSession() {
   state.session = null;
   state.instructor = null;
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  stopAutoRefresh();
 }
 
 function setLoading(isLoading, title = "Carregando portal", message = "Aguarde alguns segundos.") {
@@ -256,6 +260,94 @@ function setLoginBusy(isBusy) {
   email.disabled = isBusy;
   password.disabled = isBusy;
   button.textContent = isBusy ? "Entrando..." : "Entrar no portal";
+}
+
+function escapeSelectorValue(value) {
+  if (window.CSS?.escape) {
+    return window.CSS.escape(String(value));
+  }
+
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function captureOpenEditors(selector, dataKey) {
+  return [...document.querySelectorAll(`details.editor[open] ${selector}`)]
+    .map((element) => element.dataset[dataKey])
+    .filter(Boolean);
+}
+
+function capturePortalUiState() {
+  return {
+    scrollY: window.scrollY,
+    openUserEditors: captureOpenEditors("[data-user-id]", "userId"),
+    openExerciseEditors: captureOpenEditors("[data-exercise-id]", "exerciseId"),
+    openPortalUserEditors: captureOpenEditors("[data-portal-user-id]", "portalUserId"),
+  };
+}
+
+function restorePortalUiState(snapshot) {
+  snapshot.openUserEditors.forEach((id) => {
+    document
+      .querySelector(`[data-user-id="${escapeSelectorValue(id)}"]`)
+      ?.closest("details.editor")
+      ?.setAttribute("open", "");
+  });
+
+  snapshot.openExerciseEditors.forEach((id) => {
+    document
+      .querySelector(`[data-exercise-id="${escapeSelectorValue(id)}"]`)
+      ?.closest("details.editor")
+      ?.setAttribute("open", "");
+  });
+
+  snapshot.openPortalUserEditors.forEach((id) => {
+    document
+      .querySelector(`[data-portal-user-id="${escapeSelectorValue(id)}"]`)
+      ?.closest("details.editor")
+      ?.setAttribute("open", "");
+  });
+
+  window.scrollTo({ top: snapshot.scrollY, behavior: "auto" });
+}
+
+function collectionsChanged(nextUsers, nextExercises, nextPortalUsers) {
+  return (
+    JSON.stringify(state.users) !== JSON.stringify(nextUsers) ||
+    JSON.stringify(state.exercises) !== JSON.stringify(nextExercises) ||
+    JSON.stringify(state.portalUsers) !== JSON.stringify(nextPortalUsers)
+  );
+}
+
+function shouldDeferSilentRefresh() {
+  if (document.hidden) {
+    return true;
+  }
+
+  const active = document.activeElement;
+  if (!active) {
+    return false;
+  }
+
+  return Boolean(active.closest("input, textarea, select"));
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+
+  if (!state.session?.token) {
+    return;
+  }
+
+  autoRefreshTimer = window.setInterval(() => {
+    refreshSilently();
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    window.clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
 }
 
 function resetCollections() {
@@ -1120,24 +1212,55 @@ function renderPortalUsers() {
   });
 }
 
-async function loadAll() {
+async function loadAll(options = {}) {
+  const { preserveUi = false, forceRender = true } = options;
   const canReadStudents = hasPermission("students.read");
   const canReadExercises = hasPermission("exercises.read");
   const canReadPortalUsers = hasPermission("portal_users.read");
+  const uiSnapshot = preserveUi ? capturePortalUiState() : null;
 
   const [usersPayload, exercisesPayload, portalUsersPayload] = await Promise.all([
     canReadStudents ? request("/api/users") : Promise.resolve({ users: [] }),
     canReadExercises ? request("/api/exercises") : Promise.resolve({ exercises: [] }),
     canReadPortalUsers ? request("/api/portal-users") : Promise.resolve({ portalUsers: [] }),
   ]);
-  state.users = usersPayload.users ?? [];
-  state.exercises = exercisesPayload.exercises ?? [];
-  state.portalUsers = portalUsersPayload.portalUsers ?? [];
+  const nextUsers = usersPayload.users ?? [];
+  const nextExercises = exercisesPayload.exercises ?? [];
+  const nextPortalUsers = portalUsersPayload.portalUsers ?? [];
+  const hasChanges = collectionsChanged(nextUsers, nextExercises, nextPortalUsers);
 
-  renderUsers();
-  renderExercises();
-  renderPortalUsers();
-  syncNavigation();
+  state.users = nextUsers;
+  state.exercises = nextExercises;
+  state.portalUsers = nextPortalUsers;
+
+  if (forceRender || hasChanges) {
+    renderUsers();
+    renderExercises();
+    renderPortalUsers();
+    syncNavigation();
+
+    if (uiSnapshot) {
+      restorePortalUiState(uiSnapshot);
+    }
+  }
+}
+
+async function refreshSilently() {
+  if (!state.session?.token || autoRefreshInFlight || shouldDeferSilentRefresh()) {
+    return;
+  }
+
+  autoRefreshInFlight = true;
+
+  try {
+    await loadAll({ preserveUi: true, forceRender: false });
+  } catch (error) {
+    if (state.session?.token) {
+      console.error("Falha no refresh silencioso do portal:", error);
+    }
+  } finally {
+    autoRefreshInFlight = false;
+  }
 }
 
 async function loginInstructor() {
@@ -1164,6 +1287,7 @@ async function loginInstructor() {
         syncAuthUi();
         $("#portal-login-password").value = "";
         await loadAll();
+        startAutoRefresh();
         setActiveScreen("dashboard");
       }
     );
@@ -1194,6 +1318,7 @@ async function logoutInstructor() {
   renderExercises();
   renderPortalUsers();
   syncNavigation();
+  stopAutoRefresh();
 }
 
 async function saveExercise() {
@@ -1450,6 +1575,12 @@ window.addEventListener("resize", () => {
   }
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    refreshSilently();
+  }
+});
+
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLSelectElement)) {
@@ -1509,14 +1640,18 @@ if (state.session?.token) {
     "Recuperando sessao",
     "Carregando os modulos liberados para este acesso.",
     () => loadAll()
-  ).catch((error) => {
-    clearSession();
-    resetCollections();
-    syncAuthUi();
-    renderUsers();
-    renderExercises();
-    renderPortalUsers();
-    syncNavigation();
-    showNotice(error.message, "error");
-  });
+  )
+    .then(() => {
+      startAutoRefresh();
+    })
+    .catch((error) => {
+      clearSession();
+      resetCollections();
+      syncAuthUi();
+      renderUsers();
+      renderExercises();
+      renderPortalUsers();
+      syncNavigation();
+      showNotice(error.message, "error");
+    });
 }

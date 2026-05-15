@@ -2,7 +2,7 @@
   "expo": {
     "name": "FatBurn",
     "slug": "fatburn",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "icon": "./assets/branding/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.elderdebertolis.fatburn",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/branding/adaptive-foreground.png",
         "monochromeImage": "./assets/branding/adaptive-monochrome.png",
