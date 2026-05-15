@@ -66,12 +66,16 @@ DATABASE_URL
 FATBURN_ADMIN_EMAIL
 FATBURN_ADMIN_PASSWORD
 PGSSL
+RESEND_API_KEY
+EMAIL_FROM
 ```
 
 Observacoes:
 
 - `DATABASE_URL` deve apontar para o banco PostgreSQL do ambiente.
 - `PGSSL=true` so e necessario quando a conexao exigir SSL, como em acessos externos ao banco.
+- `RESEND_API_KEY` e `EMAIL_FROM` habilitam o fluxo de "Esqueci minha senha" no app.
+- `EMAIL_FROM` deve ser um remetente valido no provedor configurado.
 
 ## Teste no celular fisico
 

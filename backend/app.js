@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import {
   createExercise,
   createInstructor,
+  createPasswordResetCode,
   createSession,
+  consumePasswordResetCode,
   deleteUserAccount,
   exportUserData,
   finishWorkoutSession,
@@ -23,10 +25,12 @@ import {
   recalculateWorkoutPlan,
   registerUser,
   revokeSession,
+  revokeSessionsForUser,
   restartWorkoutSession,
   replaceWorkoutExercise,
   startWorkoutSession,
   updateCompletion,
+  updateUserPassword,
   updateUserConsents,
   updateExercise,
   updateInstructor,
@@ -36,9 +40,11 @@ import {
 } from "./db.js";
 import {
   PORTAL_PERMISSIONS,
+  PASSWORD_RESET_CODE_TTL_MINUTES,
   PRIVACY_POLICY_VERSION,
   SENSITIVE_CONSENT_VERSION,
   buildConsentSnapshot,
+  generatePasswordResetCode,
   hasInstructorPermission,
   issueSessionToken,
   sanitizeInstructor,
@@ -53,6 +59,7 @@ const port = Number(process.env.PORT) || 3030;
 const host = "0.0.0.0";
 const USER_SESSION_TTL_HOURS = 24 * 14;
 const INSTRUCTOR_SESSION_TTL_HOURS = 12;
+const RESEND_API_URL = "https://api.resend.com/emails";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -108,6 +115,63 @@ async function readBody(request) {
 
 function normalizeEmail(value = "") {
   return value.trim().toLowerCase();
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function isPasswordResetEmailConfigured() {
+  return Boolean(String(process.env.RESEND_API_KEY ?? "").trim() && String(process.env.EMAIL_FROM ?? "").trim());
+}
+
+async function sendPasswordResetEmail({ email, name, code, expiresInMinutes }) {
+  const apiKey = String(process.env.RESEND_API_KEY ?? "").trim();
+  const from = String(process.env.EMAIL_FROM ?? "").trim();
+
+  if (!apiKey || !from) {
+    throw new Error("Recuperacao por email nao configurada no servidor.");
+  }
+
+  const displayName = escapeHtml(name?.trim() || "aluno");
+  const safeCode = escapeHtml(code);
+  const safeExpiry = escapeHtml(String(expiresInMinutes));
+  const response = await fetch(RESEND_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      subject: "FatBurn | Codigo para redefinir senha",
+      text: `Seu codigo do FatBurn e ${code}. Ele expira em ${expiresInMinutes} minutos.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #1a1a1a;">
+          <p>Ola, ${displayName}.</p>
+          <p>Use o codigo abaixo para redefinir sua senha no FatBurn:</p>
+          <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px; margin: 18px 0; color: #ff6a00;">
+            ${safeCode}
+          </p>
+          <p>Esse codigo expira em ${safeExpiry} minutos.</p>
+          <p>Se voce nao pediu a redefinicao, ignore este email.</p>
+        </div>
+      `,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `Nao foi possivel enviar o email de recuperacao.${detail ? ` ${detail}` : ""}`
+    );
+  }
 }
 
 function validateRegisterPayload(payload) {
@@ -708,6 +772,106 @@ createServer(async (request, response) => {
         policyVersion: PRIVACY_POLICY_VERSION,
         sensitiveConsentVersion: SENSITIVE_CONSENT_VERSION,
         bundle,
+      });
+      return;
+    }
+
+    if (pathname === "/api/auth/forgot-password" && request.method === "POST") {
+      const payload = await readBody(request);
+      const email = normalizeEmail(payload.email);
+
+      if (!email || !email.includes("@")) {
+        sendJson(response, 400, { error: "Informe um email valido." });
+        return;
+      }
+
+      if (!isPasswordResetEmailConfigured()) {
+        sendJson(response, 503, {
+          error:
+            "Recuperacao por email ainda nao configurada no servidor. Defina RESEND_API_KEY e EMAIL_FROM.",
+        });
+        return;
+      }
+
+      const user = await findUserRowByEmail(email);
+      const successMessage =
+        "Se o email estiver cadastrado, enviamos um codigo para redefinir a senha.";
+
+      if (!user) {
+        sendJson(response, 200, {
+          ok: true,
+          message: successMessage,
+          expiresInMinutes: PASSWORD_RESET_CODE_TTL_MINUTES,
+        });
+        return;
+      }
+
+      const code = generatePasswordResetCode();
+      const expiresAt = new Date(
+        Date.now() + PASSWORD_RESET_CODE_TTL_MINUTES * 60 * 1000
+      ).toISOString();
+
+      await createPasswordResetCode(user.id, email, code, expiresAt);
+      await sendPasswordResetEmail({
+        email,
+        name: user.name,
+        code,
+        expiresInMinutes: PASSWORD_RESET_CODE_TTL_MINUTES,
+      });
+      await logAuditEvent({
+        actorType: "system",
+        actorId: user.id,
+        action: "auth.password_reset.requested",
+        targetType: "user",
+        targetId: user.id,
+      });
+      sendJson(response, 200, {
+        ok: true,
+        message: successMessage,
+        expiresInMinutes: PASSWORD_RESET_CODE_TTL_MINUTES,
+      });
+      return;
+    }
+
+    if (pathname === "/api/auth/reset-password" && request.method === "POST") {
+      const payload = await readBody(request);
+      const email = normalizeEmail(payload.email);
+      const code = String(payload.code ?? "").trim();
+      const password = String(payload.password ?? "").trim();
+
+      if (!email || !email.includes("@")) {
+        sendJson(response, 400, { error: "Informe um email valido." });
+        return;
+      }
+
+      if (!/^\d{6}$/.test(code)) {
+        sendJson(response, 400, { error: "Informe o codigo de 6 digitos enviado por email." });
+        return;
+      }
+
+      if (password.length < 8) {
+        sendJson(response, 400, { error: "A nova senha deve ter pelo menos 8 caracteres." });
+        return;
+      }
+
+      const passwordReset = await consumePasswordResetCode(email, code);
+      if (!passwordReset) {
+        sendJson(response, 400, { error: "Codigo invalido ou expirado." });
+        return;
+      }
+
+      await updateUserPassword(passwordReset.userId, password);
+      await revokeSessionsForUser(passwordReset.userId);
+      await logAuditEvent({
+        actorType: "system",
+        actorId: passwordReset.userId,
+        action: "auth.password_reset.completed",
+        targetType: "user",
+        targetId: passwordReset.userId,
+      });
+      sendJson(response, 200, {
+        ok: true,
+        message: "Senha redefinida com sucesso. Entre com a nova senha.",
       });
       return;
     }

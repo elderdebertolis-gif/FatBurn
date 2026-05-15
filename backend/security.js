@@ -4,6 +4,7 @@ const PASSWORD_SCHEME = "pbkdf2-sha512";
 const PASSWORD_ITERATIONS = 120000;
 const PASSWORD_KEY_LENGTH = 64;
 const PASSWORD_DIGEST = "sha512";
+export const PASSWORD_RESET_CODE_TTL_MINUTES = 15;
 
 export const PRIVACY_POLICY_VERSION = "2026.05";
 export const SENSITIVE_CONSENT_VERSION = "2026.05";
@@ -94,6 +95,10 @@ export function issueSessionToken() {
 
 export function hashToken(token) {
   return createHash("sha256").update(String(token ?? "")).digest("hex");
+}
+
+export function generatePasswordResetCode() {
+  return String(randomBytes(4).readUInt32BE(0) % 1000000).padStart(6, "0");
 }
 
 export function buildConsentSnapshot(user) {

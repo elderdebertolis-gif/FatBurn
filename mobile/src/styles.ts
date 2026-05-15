@@ -99,6 +99,16 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "SpaceGrotesk_700Bold",
   },
+  authInlineLink: {
+    alignSelf: "center",
+    marginTop: 2,
+    paddingVertical: 6,
+  },
+  authInlineLinkText: {
+    color: COLOR.muted,
+    fontSize: 13,
+    fontFamily: "SpaceGrotesk_500Medium",
+  },
   brandHorizontal: {
     width: 238,
     height: 74,
@@ -353,6 +363,32 @@ export const styles = StyleSheet.create({
     color: COLOR.white,
     fontSize: 15,
     fontFamily: "SpaceGrotesk_400Regular",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  inputControl: {
+    flex: 1,
+  },
+  inputActionButton: {
+    minHeight: 52,
+    minWidth: 82,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLOR.borderStrong,
+    backgroundColor: COLOR.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  inputActionText: {
+    color: COLOR.orange,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    fontFamily: "SpaceGrotesk_700Bold",
   },
   inputMultiline: {
     minHeight: 92,

@@ -46,6 +46,17 @@ export type AuthenticatedUserSession = {
   bundle: UserBundle;
 };
 
+export type PasswordResetRequestResponse = {
+  ok: boolean;
+  message: string;
+  expiresInMinutes: number;
+};
+
+export type PasswordResetConfirmResponse = {
+  ok: boolean;
+  message: string;
+};
+
 export type PrivacyExportPayload = {
   exportedAt: string;
   policyVersion: string;
@@ -134,6 +145,26 @@ export async function registerUser(payload: UserPayload): Promise<AuthenticatedU
   return request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function requestPasswordReset(
+  email: string
+): Promise<PasswordResetRequestResponse> {
+  return request("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPasswordWithCode(
+  email: string,
+  code: string,
+  password: string
+): Promise<PasswordResetConfirmResponse> {
+  return request("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ email, code, password }),
   });
 }
 

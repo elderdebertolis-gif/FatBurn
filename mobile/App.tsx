@@ -40,7 +40,9 @@ import {
   fetchUserBundle,
   loginUser,
   logoutUser,
+  requestPasswordReset,
   registerUser,
+  resetPasswordWithCode,
   replaceWorkoutExercise,
   restartWorkout,
   saveDailyWeight,
@@ -103,6 +105,7 @@ const TAB_BAR_OFFSET = Platform.OS === "android" ? 18 : 12;
 type TabKey = (typeof TAB_ITEMS)[number]["key"];
 type AuthMode = "login" | "register";
 type NoticeTone = "info" | "success" | "error";
+type PasswordResetStep = "request" | "confirm";
 
 type ProfileFormState = {
   name: string;
@@ -210,6 +213,18 @@ function validateForm(form: ProfileFormState, options?: { requirePassword?: bool
   ) {
     return "Escolha uma frequencia entre 2 e 6 dias.";
   }
+  return null;
+}
+
+function validateMatchingPasswords(password: string, confirmPassword: string): string | null {
+  if (!confirmPassword.trim()) {
+    return "Confirme a senha para continuar.";
+  }
+
+  if (password.trim() !== confirmPassword.trim()) {
+    return "As senhas digitadas nao coincidem.";
+  }
+
   return null;
 }
 
@@ -374,17 +389,38 @@ function buildDirectVideoHtml(videoUrl: string) {
 function LabeledInput({
   label,
   multiline,
+  actionLabel,
+  onActionPress,
   ...props
-}: { label: string; multiline?: boolean } & TextInputProps) {
+}: {
+  label: string;
+  multiline?: boolean;
+  actionLabel?: string;
+  onActionPress?: () => void;
+} & TextInputProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        placeholderTextColor="#6f6f6f"
-        style={[styles.input, multiline ? styles.inputMultiline : null]}
-        multiline={multiline}
-        {...props}
-      />
+      {actionLabel && onActionPress && !multiline ? (
+        <View style={styles.inputRow}>
+          <TextInput
+            placeholderTextColor="#6f6f6f"
+            style={[styles.input, styles.inputControl]}
+            multiline={multiline}
+            {...props}
+          />
+          <Pressable style={styles.inputActionButton} onPress={onActionPress}>
+            <Text style={styles.inputActionText}>{actionLabel}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <TextInput
+          placeholderTextColor="#6f6f6f"
+          style={[styles.input, multiline ? styles.inputMultiline : null]}
+          multiline={multiline}
+          {...props}
+        />
+      )}
     </View>
   );
 }
@@ -499,10 +535,16 @@ function UserFormFields({
   form,
   onChange,
   passwordLabel,
+  passwordVisible,
+  onTogglePasswordVisibility,
+  afterPasswordField,
 }: {
   form: ProfileFormState;
   onChange: <K extends keyof ProfileFormState>(field: K, value: ProfileFormState[K]) => void;
   passwordLabel?: string;
+  passwordVisible?: boolean;
+  onTogglePasswordVisibility?: () => void;
+  afterPasswordField?: React.ReactNode;
 }) {
   return (
     <>
@@ -517,9 +559,12 @@ function UserFormFields({
       <LabeledInput
         label={passwordLabel ?? "Senha"}
         value={form.password}
-        secureTextEntry
+        secureTextEntry={!passwordVisible}
+        actionLabel={passwordVisible ? "Ocultar" : "Mostrar"}
+        onActionPress={onTogglePasswordVisibility}
         onChangeText={(value) => onChange("password", value)}
       />
+      {afterPasswordField ?? null}
       <LabeledInput
         label="Idade"
         value={form.age}
@@ -606,10 +651,15 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginPasswordVisible, setLoginPasswordVisible] = useState(false);
   const [registerForm, setRegisterForm] = useState<ProfileFormState>(createEmptyForm());
+  const [registerPasswordVisible, setRegisterPasswordVisible] = useState(false);
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [registerConfirmPasswordVisible, setRegisterConfirmPasswordVisible] = useState(false);
   const [acceptedPrivacyPolicy, setAcceptedPrivacyPolicy] = useState(false);
   const [acceptedSensitiveConsent, setAcceptedSensitiveConsent] = useState(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(createEmptyForm());
+  const [profilePasswordVisible, setProfilePasswordVisible] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [replacementContext, setReplacementContext] = useState<ReplacementContext>(null);
   const [videoContext, setVideoContext] = useState<VideoContext>(null);
@@ -618,6 +668,15 @@ export default function App() {
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [privacyNoticeOpen, setPrivacyNoticeOpen] = useState(false);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
+  const [passwordResetStep, setPasswordResetStep] = useState<PasswordResetStep>("request");
+  const [passwordResetEmail, setPasswordResetEmail] = useState("");
+  const [passwordResetCode, setPasswordResetCode] = useState("");
+  const [passwordResetPassword, setPasswordResetPassword] = useState("");
+  const [passwordResetPasswordVisible, setPasswordResetPasswordVisible] = useState(false);
+  const [passwordResetConfirmPassword, setPasswordResetConfirmPassword] = useState("");
+  const [passwordResetConfirmPasswordVisible, setPasswordResetConfirmPasswordVisible] =
+    useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const authScrollRef = useRef<ScrollView | null>(null);
   const appScrollRef = useRef<ScrollView | null>(null);
@@ -631,6 +690,7 @@ export default function App() {
       return;
     }
     setProfileForm(buildFormFromUser(bundle.user));
+    setProfilePasswordVisible(false);
     setWeightInput(String(bundle.user.weightKg));
     setSetDrafts({});
     setProfileEditorOpen(false);
@@ -750,6 +810,27 @@ export default function App() {
     await AsyncStorage.removeItem(SESSION_KEY);
   }
 
+  function openPasswordResetModal() {
+    setPasswordResetEmail(loginEmail.trim().toLowerCase());
+    setPasswordResetCode("");
+    setPasswordResetPassword("");
+    setPasswordResetConfirmPassword("");
+    setPasswordResetPasswordVisible(false);
+    setPasswordResetConfirmPasswordVisible(false);
+    setPasswordResetStep("request");
+    setPasswordResetOpen(true);
+  }
+
+  function closePasswordResetModal() {
+    setPasswordResetOpen(false);
+    setPasswordResetCode("");
+    setPasswordResetPassword("");
+    setPasswordResetConfirmPassword("");
+    setPasswordResetPasswordVisible(false);
+    setPasswordResetConfirmPasswordVisible(false);
+    setPasswordResetStep("request");
+  }
+
   async function handleLogin() {
     if (!loginEmail.trim() || !loginPassword.trim()) {
       setNotice({ title: "Entrar", message: "Preencha email e senha.", tone: "error" });
@@ -761,7 +842,9 @@ export default function App() {
       const nextSession = await loginUser(loginEmail.trim(), loginPassword.trim());
       await persistAuthenticatedSession(nextSession);
       setActiveTab("dashboard");
+      setPasswordResetOpen(false);
       setLoginPassword("");
+      setLoginPasswordVisible(false);
       setSessionError("");
     } catch (error) {
       setNotice({
@@ -778,6 +861,15 @@ export default function App() {
     const validationError = validateForm(registerForm, { requirePassword: true });
     if (validationError) {
       setNotice({ title: "Cadastro", message: validationError, tone: "error" });
+      return;
+    }
+
+    const passwordValidation = validateMatchingPasswords(
+      registerForm.password,
+      registerConfirmPassword
+    );
+    if (passwordValidation) {
+      setNotice({ title: "Cadastro", message: passwordValidation, tone: "error" });
       return;
     }
 
@@ -799,6 +891,9 @@ export default function App() {
       });
       await persistAuthenticatedSession(nextSession);
       setRegisterForm(createEmptyForm());
+      setRegisterPasswordVisible(false);
+      setRegisterConfirmPassword("");
+      setRegisterConfirmPasswordVisible(false);
       setAcceptedPrivacyPolicy(false);
       setAcceptedSensitiveConsent(false);
       setActiveTab("dashboard");
@@ -825,6 +920,7 @@ export default function App() {
     setBundle(null);
     setLoginEmail("");
     setLoginPassword("");
+    setLoginPasswordVisible(false);
     setAuthMode("login");
     setActiveTab("dashboard");
     setSelectedWorkoutId(null);
@@ -848,6 +944,7 @@ export default function App() {
       setSessionError("");
       setProfileEditorOpen(false);
       setProfileForm((current) => ({ ...current, password: "" }));
+      setProfilePasswordVisible(false);
       setNotice({
         title: "Perfil atualizado",
         message: "Cadastro salvo e treino recalculado.",
@@ -856,6 +953,105 @@ export default function App() {
     } catch (error) {
       setNotice({
         title: "Erro ao salvar",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRequestPasswordReset() {
+    const email = passwordResetEmail.trim().toLowerCase();
+
+    if (!email || !email.includes("@")) {
+      setNotice({
+        title: "Recuperacao de senha",
+        message: "Informe o email cadastrado para receber o codigo.",
+        tone: "error",
+      });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const response = await requestPasswordReset(email);
+      setPasswordResetEmail(email);
+      setPasswordResetStep("confirm");
+      setNotice({
+        title: "Codigo enviado",
+        message: response.message,
+        tone: "success",
+      });
+    } catch (error) {
+      setNotice({
+        title: "Recuperacao de senha",
+        message: (error as ApiError).message,
+        tone: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmPasswordReset() {
+    const email = passwordResetEmail.trim().toLowerCase();
+    const code = passwordResetCode.trim();
+
+    if (!email || !email.includes("@")) {
+      setNotice({
+        title: "Redefinir senha",
+        message: "Informe o email cadastrado para concluir a redefinicao.",
+        tone: "error",
+      });
+      return;
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      setNotice({
+        title: "Redefinir senha",
+        message: "Informe o codigo de 6 digitos enviado por email.",
+        tone: "error",
+      });
+      return;
+    }
+
+    if (passwordResetPassword.trim().length < 8) {
+      setNotice({
+        title: "Redefinir senha",
+        message: "A nova senha deve ter pelo menos 8 caracteres.",
+        tone: "error",
+      });
+      return;
+    }
+
+    const passwordValidation = validateMatchingPasswords(
+      passwordResetPassword,
+      passwordResetConfirmPassword
+    );
+    if (passwordValidation) {
+      setNotice({
+        title: "Redefinir senha",
+        message: passwordValidation,
+        tone: "error",
+      });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const response = await resetPasswordWithCode(email, code, passwordResetPassword.trim());
+      closePasswordResetModal();
+      setLoginEmail(email);
+      setLoginPassword("");
+      setNotice({
+        title: "Senha redefinida",
+        message: response.message,
+        tone: "success",
+      });
+    } catch (error) {
+      setNotice({
+        title: "Redefinir senha",
         message: (error as ApiError).message,
         tone: "error",
       });
@@ -1238,6 +1434,100 @@ export default function App() {
     );
   }
 
+  function renderPasswordResetModal() {
+    return (
+      <Modal
+        animationType="fade"
+        transparent
+        visible={passwordResetOpen}
+        onRequestClose={closePasswordResetModal}
+      >
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogCard}>
+            <Text style={styles.dialogTitle}>
+              {passwordResetStep === "request" ? "Esqueci minha senha" : "Redefinir senha"}
+            </Text>
+            <Text style={styles.dialogText}>
+              {passwordResetStep === "request"
+                ? "Informe o email cadastrado para receber um codigo de redefinicao."
+                : "Digite o codigo enviado por email e escolha sua nova senha."}
+            </Text>
+            <View style={{ marginTop: 14 }}>
+              <LabeledInput
+                label="Email"
+                value={passwordResetEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={passwordResetStep === "request"}
+                onChangeText={setPasswordResetEmail}
+              />
+              {passwordResetStep === "confirm" ? (
+                <>
+                  <LabeledInput
+                    label="Codigo"
+                    value={passwordResetCode}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onChangeText={setPasswordResetCode}
+                  />
+                  <LabeledInput
+                    label="Nova senha"
+                    value={passwordResetPassword}
+                    secureTextEntry={!passwordResetPasswordVisible}
+                    actionLabel={passwordResetPasswordVisible ? "Ocultar" : "Mostrar"}
+                    onActionPress={() =>
+                      setPasswordResetPasswordVisible((current) => !current)
+                    }
+                    onChangeText={setPasswordResetPassword}
+                  />
+                  <LabeledInput
+                    label="Confirmar nova senha"
+                    value={passwordResetConfirmPassword}
+                    secureTextEntry={!passwordResetConfirmPasswordVisible}
+                    actionLabel={passwordResetConfirmPasswordVisible ? "Ocultar" : "Mostrar"}
+                    onActionPress={() =>
+                      setPasswordResetConfirmPasswordVisible((current) => !current)
+                    }
+                    onChangeText={setPasswordResetConfirmPassword}
+                  />
+                </>
+              ) : null}
+            </View>
+            <View style={styles.dialogActions}>
+              {passwordResetStep === "confirm" ? (
+                <ActionButton
+                  label="Voltar"
+                  onPress={() => setPasswordResetStep("request")}
+                  secondary
+                  compact
+                />
+              ) : (
+                <ActionButton
+                  label="Fechar"
+                  onPress={closePasswordResetModal}
+                  secondary
+                  compact
+                />
+              )}
+              <ActionButton
+                label={passwordResetStep === "request" ? "Enviar codigo" : "Salvar senha"}
+                onPress={() =>
+                  void (
+                    passwordResetStep === "request"
+                      ? handleRequestPasswordReset()
+                      : handleConfirmPasswordReset()
+                  )
+                }
+                compact
+                disabled={busy}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
   function renderConsentGate() {
     if (!bundle || bundle.user.consents.accepted) {
       return null;
@@ -1362,13 +1652,29 @@ export default function App() {
                 <LabeledInput
                   label="Senha"
                   value={loginPassword}
-                  secureTextEntry
+                  secureTextEntry={!loginPasswordVisible}
+                  actionLabel={loginPasswordVisible ? "Ocultar" : "Mostrar"}
+                  onActionPress={() => setLoginPasswordVisible((current) => !current)}
                   onChangeText={setLoginPassword}
                 />
                 <View style={[styles.buttonRow, styles.buttonRowCentered]}>
                   <ActionButton label="Entrar" onPress={() => void handleLogin()} disabled={busy} />
                 </View>
-                <Pressable style={styles.authSwitch} onPress={() => setAuthMode("register")}>
+                <Pressable style={styles.authInlineLink} onPress={openPasswordResetModal}>
+                  <Text style={styles.authInlineLinkText}>Esqueci minha senha</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.authSwitch}
+                  onPress={() => {
+                    setRegisterForm(createEmptyForm());
+                    setRegisterPasswordVisible(false);
+                    setRegisterConfirmPassword("");
+                    setRegisterConfirmPasswordVisible(false);
+                    setAcceptedPrivacyPolicy(false);
+                    setAcceptedSensitiveConsent(false);
+                    setAuthMode("register");
+                  }}
+                >
                   <Text style={styles.authSwitchText}>Nao tem conta? Criar cadastro</Text>
                 </Pressable>
               </>
@@ -1378,6 +1684,22 @@ export default function App() {
                   form={registerForm}
                   onChange={updateRegisterForm}
                   passwordLabel="Senha"
+                  passwordVisible={registerPasswordVisible}
+                  onTogglePasswordVisibility={() =>
+                    setRegisterPasswordVisible((current) => !current)
+                  }
+                  afterPasswordField={
+                    <LabeledInput
+                      label="Confirmar senha"
+                      value={registerConfirmPassword}
+                      secureTextEntry={!registerConfirmPasswordVisible}
+                      actionLabel={registerConfirmPasswordVisible ? "Ocultar" : "Mostrar"}
+                      onActionPress={() =>
+                        setRegisterConfirmPasswordVisible((current) => !current)
+                      }
+                      onChangeText={setRegisterConfirmPassword}
+                    />
+                  }
                 />
                 <View style={styles.cardInset}>
                   <ToggleCheck
@@ -1401,7 +1723,15 @@ export default function App() {
                     disabled={busy}
                   />
                 </View>
-                <Pressable style={styles.authSwitch} onPress={() => setAuthMode("login")}>
+                <Pressable
+                  style={styles.authSwitch}
+                  onPress={() => {
+                    setRegisterPasswordVisible(false);
+                    setRegisterConfirmPassword("");
+                    setRegisterConfirmPasswordVisible(false);
+                    setAuthMode("login");
+                  }}
+                >
                   <Text style={styles.authSwitchText}>Ja tem conta? Entrar</Text>
                 </Pressable>
               </>
@@ -1409,6 +1739,7 @@ export default function App() {
           </View>
         </ScrollView>
         {renderPrivacyNoticeModal()}
+        {renderPasswordResetModal()}
         {renderNoticeModal()}
       </SafeAreaView>
     );
@@ -2035,6 +2366,8 @@ export default function App() {
               form={profileForm}
               onChange={updateProfileForm}
               passwordLabel="Nova senha (opcional)"
+              passwordVisible={profilePasswordVisible}
+              onTogglePasswordVisibility={() => setProfilePasswordVisible((current) => !current)}
             />
           ) : null}
 

@@ -230,6 +230,16 @@ async function initializeDatabase() {
       last_seen_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS password_reset_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      consumed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY,
       actor_type TEXT NOT NULL,
@@ -253,6 +263,10 @@ async function initializeDatabase() {
       ON workout_status_entries (user_id, week_key, workout_label);
     CREATE INDEX IF NOT EXISTS idx_sessions_role_user
       ON sessions (role, user_id, instructor_id);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_codes_lookup
+      ON password_reset_codes ((lower(email)), created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user
+      ON password_reset_codes (user_id, consumed_at, expires_at);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_target
       ON audit_logs (target_id, actor_id);
   `);
@@ -905,6 +919,83 @@ export async function revokeSessionsForUser(userId) {
     `UPDATE sessions SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL`,
     [new Date().toISOString(), userId]
   );
+}
+
+export async function createPasswordResetCode(userId, email, code, expiresAt) {
+  const timestamp = new Date().toISOString();
+
+  await transaction(async (client) => {
+    await execute(
+      client,
+      `
+        UPDATE password_reset_codes
+        SET consumed_at = $1
+        WHERE user_id = $2 AND consumed_at IS NULL
+      `,
+      [timestamp, userId]
+    );
+
+    await execute(
+      client,
+      `
+        INSERT INTO password_reset_codes (
+          id, user_id, email, code_hash, expires_at, consumed_at, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        generateId("password-reset"),
+        userId,
+        email.toLowerCase(),
+        hashToken(code),
+        expiresAt,
+        null,
+        timestamp,
+      ]
+    );
+  });
+}
+
+export async function consumePasswordResetCode(email, code) {
+  const row = await queryOne(
+    `
+      SELECT *
+      FROM password_reset_codes
+      WHERE lower(email) = lower($1)
+        AND code_hash = $2
+        AND consumed_at IS NULL
+        AND expires_at > NOW()
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [email, hashToken(code)]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  const consumedAt = new Date().toISOString();
+  await query(`UPDATE password_reset_codes SET consumed_at = $1 WHERE id = $2`, [
+    consumedAt,
+    row.id,
+  ]);
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    email: row.email,
+    expiresAt: toIso(row.expires_at),
+    createdAt: toIso(row.created_at),
+    consumedAt,
+  };
+}
+
+export async function updateUserPassword(userId, password) {
+  await query(`UPDATE users SET password = $1, updated_at = $2 WHERE id = $3`, [
+    hashPassword(password),
+    new Date().toISOString(),
+    userId,
+  ]);
 }
 
 export async function logAuditEvent(payload) {
