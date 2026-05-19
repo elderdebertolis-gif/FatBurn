@@ -374,21 +374,14 @@ export const styles = StyleSheet.create({
   },
   inputActionButton: {
     minHeight: 52,
-    minWidth: 82,
+    minWidth: 52,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLOR.borderStrong,
     backgroundColor: COLOR.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  inputActionText: {
-    color: COLOR.orange,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    fontFamily: "SpaceGrotesk_700Bold",
+    paddingHorizontal: 0,
   },
   inputMultiline: {
     minHeight: 92,

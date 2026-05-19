@@ -88,7 +88,7 @@ const screenDefinitions = {
   dashboard: {
     eyebrow: "Portal FatBurn",
     title: "Home",
-    description: "Visao geral do portal, modulos disponiveis e indicadores rapidos.",
+    description: "Resumo do portal, indicadores principais e atalhos.",
     available: () => true,
   },
   students: {
@@ -1303,7 +1303,6 @@ async function logoutInstructor() {
       method: "POST",
     });
   } catch {
-    // A limpeza local continua mesmo se a sessao ja tiver expirado no servidor.
   }
 
   clearSession();

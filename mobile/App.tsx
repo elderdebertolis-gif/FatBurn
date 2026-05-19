@@ -389,19 +389,19 @@ function buildDirectVideoHtml(videoUrl: string) {
 function LabeledInput({
   label,
   multiline,
-  actionLabel,
+  actionIcon,
   onActionPress,
   ...props
 }: {
   label: string;
   multiline?: boolean;
-  actionLabel?: string;
+  actionIcon?: BrandIconName;
   onActionPress?: () => void;
 } & TextInputProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      {actionLabel && onActionPress && !multiline ? (
+      {actionIcon && onActionPress && !multiline ? (
         <View style={styles.inputRow}>
           <TextInput
             placeholderTextColor="#6f6f6f"
@@ -409,8 +409,8 @@ function LabeledInput({
             multiline={multiline}
             {...props}
           />
-          <Pressable style={styles.inputActionButton} onPress={onActionPress}>
-            <Text style={styles.inputActionText}>{actionLabel}</Text>
+          <Pressable style={styles.inputActionButton} onPress={onActionPress} hitSlop={8}>
+            <MaterialCommunityIcons name={actionIcon} size={21} color="#ff6a00" />
           </Pressable>
         </View>
       ) : (
@@ -560,7 +560,7 @@ function UserFormFields({
         label={passwordLabel ?? "Senha"}
         value={form.password}
         secureTextEntry={!passwordVisible}
-        actionLabel={passwordVisible ? "Ocultar" : "Mostrar"}
+        actionIcon={passwordVisible ? "eye-off-outline" : "eye-outline"}
         onActionPress={onTogglePasswordVisibility}
         onChangeText={(value) => onChange("password", value)}
       />
@@ -913,9 +913,7 @@ export default function App() {
   async function handleLogout() {
     try {
       await logoutUser();
-    } catch {
-      // Mantem logout local mesmo se a sessao ja tiver expirado no servidor.
-    }
+    } catch {}
     await clearStoredSession();
     setBundle(null);
     setLoginEmail("");
@@ -947,7 +945,7 @@ export default function App() {
       setProfilePasswordVisible(false);
       setNotice({
         title: "Perfil atualizado",
-        message: "Cadastro salvo e treino recalculado.",
+        message: "Perfil salvo. O treino foi atualizado.",
         tone: "success",
       });
     } catch (error) {
@@ -1474,7 +1472,7 @@ export default function App() {
                     label="Nova senha"
                     value={passwordResetPassword}
                     secureTextEntry={!passwordResetPasswordVisible}
-                    actionLabel={passwordResetPasswordVisible ? "Ocultar" : "Mostrar"}
+                    actionIcon={passwordResetPasswordVisible ? "eye-off-outline" : "eye-outline"}
                     onActionPress={() =>
                       setPasswordResetPasswordVisible((current) => !current)
                     }
@@ -1484,7 +1482,9 @@ export default function App() {
                     label="Confirmar nova senha"
                     value={passwordResetConfirmPassword}
                     secureTextEntry={!passwordResetConfirmPasswordVisible}
-                    actionLabel={passwordResetConfirmPasswordVisible ? "Ocultar" : "Mostrar"}
+                    actionIcon={
+                      passwordResetConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"
+                    }
                     onActionPress={() =>
                       setPasswordResetConfirmPasswordVisible((current) => !current)
                     }
@@ -1633,8 +1633,8 @@ export default function App() {
               <Text style={styles.sectionTitle}>{authMode === "login" ? "Login" : "Cadastro"}</Text>
               <Text style={styles.sectionSubtitle}>
                 {authMode === "login"
-                  ? "Informe seu email e senha."
-                  : "Voce podera alterar essas informacoes depois no perfil."}
+                  ? "Use seu email e senha."
+                  : "Esses dados podem ser alterados depois no perfil."}
               </Text>
             </View>
 
@@ -1653,7 +1653,7 @@ export default function App() {
                   label="Senha"
                   value={loginPassword}
                   secureTextEntry={!loginPasswordVisible}
-                  actionLabel={loginPasswordVisible ? "Ocultar" : "Mostrar"}
+                  actionIcon={loginPasswordVisible ? "eye-off-outline" : "eye-outline"}
                   onActionPress={() => setLoginPasswordVisible((current) => !current)}
                   onChangeText={setLoginPassword}
                 />
@@ -1693,7 +1693,9 @@ export default function App() {
                       label="Confirmar senha"
                       value={registerConfirmPassword}
                       secureTextEntry={!registerConfirmPasswordVisible}
-                      actionLabel={registerConfirmPasswordVisible ? "Ocultar" : "Mostrar"}
+                      actionIcon={
+                        registerConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"
+                      }
                       onActionPress={() =>
                         setRegisterConfirmPasswordVisible((current) => !current)
                       }

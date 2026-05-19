@@ -1,6 +1,12 @@
 # FatBurn
 
-Projeto reorganizado em tres frentes:
+Aplicacao de treino e acompanhamento fisico com:
+
+- `mobile`: app Expo + React Native
+- `backend`: API Node.js com PostgreSQL
+- `portal`: painel web do instrutor
+
+## Estrutura
 
 ```text
 FatBurn/
@@ -9,18 +15,7 @@ FatBurn/
 └── portal/
 ```
 
-## Estrutura
-
-- `backend/`
-  API Node.js, regras de treino e persistencia em PostgreSQL.
-
-- `portal/`
-  Pagina web do instrutor, servida pelo backend.
-
-- `mobile/`
-  Aplicativo Expo + React Native.
-
-## Como executar
+## Execucao local
 
 Backend:
 
@@ -43,23 +38,14 @@ Portal:
 http://localhost:3030
 ```
 
-## Acesso e privacidade
-
-- O `mobile` agora usa sessao autenticada por `token`, nao mais apenas `userId` salvo localmente.
-- O cadastro exige aceite do aviso de privacidade e do tratamento de dados sensiveis de saude.
-- O app permite `exportar dados` e `excluir conta` pela aba `Perfil`.
-- O `portal` exige login de instrutor.
-- O `portal` agora suporta usuarios internos com perfis `admin`, `instrutor` e `visualizador`.
-- O `admin` pode criar outros acessos e definir permissões por modulo no proprio portal.
-
-Credenciais padrao locais do instrutor:
+## Credenciais locais do portal
 
 ```text
 email: admin@fatburn.app
 senha: FatBurn@123
 ```
 
-Para producao, substitua por variaveis de ambiente no backend:
+## Variaveis de ambiente do backend
 
 ```text
 DATABASE_URL
@@ -73,13 +59,13 @@ EMAIL_FROM
 Observacoes:
 
 - `DATABASE_URL` deve apontar para o banco PostgreSQL do ambiente.
-- `PGSSL=true` so e necessario quando a conexao exigir SSL, como em acessos externos ao banco.
-- `RESEND_API_KEY` e `EMAIL_FROM` habilitam o fluxo de "Esqueci minha senha" no app.
+- `PGSSL=true` so e necessario quando a conexao exigir SSL.
+- `RESEND_API_KEY` e `EMAIL_FROM` habilitam o envio de codigo para redefinicao de senha.
 - `EMAIL_FROM` deve ser um remetente valido no provedor configurado.
 
 ## Teste no celular fisico
 
-Dentro de `mobile/`, defina o IP da maquina antes de subir o Expo:
+Dentro de `mobile/`, defina o IP da maquina antes de iniciar o Expo:
 
 ```bash
 $env:EXPO_PUBLIC_API_URL="http://SEU_IP_LOCAL:3030"
