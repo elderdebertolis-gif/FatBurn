@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildOpenApiSpec, renderSwaggerUiHtml } from "./openapi.js";
 import {
   createExercise,
   createInstructor,
@@ -504,6 +505,17 @@ createServer(async (request, response) => {
   }
 
   try {
+    if (pathname === "/api/docs/openapi.json" && request.method === "GET") {
+      const origin = `${url.protocol}//${url.host}`;
+      sendJson(response, 200, buildOpenApiSpec(origin));
+      return;
+    }
+
+    if ((pathname === "/api/docs" || pathname === "/api/docs/") && request.method === "GET") {
+      sendHtml(response, 200, renderSwaggerUiHtml("/api/docs/openapi.json"));
+      return;
+    }
+
     if (pathname === "/embed/video" && request.method === "GET") {
       const videoUrl = url.searchParams.get("videoUrl") ?? "";
       const pageOrigin = `${url.protocol}//${url.host}`;
