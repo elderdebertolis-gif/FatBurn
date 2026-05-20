@@ -98,7 +98,7 @@ const ENVIRONMENT_OPTIONS = [
 const TRAINING_DAYS_OPTIONS = ["2", "3", "4", "5", "6"] as const;
 
 const BRAND_LOGO_HORIZONTAL = require("./assets/branding/logo-horizontal-dark.png");
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.3";
 const ANDROID_TOP_OFFSET = Platform.OS === "android" ? NativeStatusBar.currentHeight ?? 0 : 0;
 const TAB_BAR_OFFSET = Platform.OS === "android" ? 18 : 12;
 
