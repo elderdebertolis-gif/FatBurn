@@ -240,6 +240,19 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      email TEXT NOT NULL,
+      ip_address TEXT NOT NULL,
+      failure_count INTEGER NOT NULL,
+      window_started_at TIMESTAMPTZ NOT NULL,
+      last_failed_at TIMESTAMPTZ NOT NULL,
+      blocked_until TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY,
       actor_type TEXT NOT NULL,
@@ -267,6 +280,10 @@ async function initializeDatabase() {
       ON password_reset_codes ((lower(email)), created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user
       ON password_reset_codes (user_id, consumed_at, expires_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_login_attempts_scope_email_ip
+      ON login_attempts (scope, email, ip_address);
+    CREATE INDEX IF NOT EXISTS idx_login_attempts_blocked_until
+      ON login_attempts (blocked_until);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_target
       ON audit_logs (target_id, actor_id);
   `);
@@ -919,6 +936,185 @@ export async function revokeSessionsForUser(userId) {
     `UPDATE sessions SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL`,
     [new Date().toISOString(), userId]
   );
+}
+
+export async function getLoginAttemptState(scope, email, ipAddress) {
+  const normalizedScope = String(scope ?? "").trim();
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
+  const normalizedIpAddress = String(ipAddress ?? "").trim();
+
+  if (!normalizedScope || !normalizedEmail || !normalizedIpAddress) {
+    return null;
+  }
+
+  const row = await queryOne(
+    `
+      SELECT *
+      FROM login_attempts
+      WHERE scope = $1
+        AND email = $2
+        AND ip_address = $3
+    `,
+    [normalizedScope, normalizedEmail, normalizedIpAddress]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    scope: row.scope,
+    email: row.email,
+    ipAddress: row.ip_address,
+    failureCount: Number(row.failure_count ?? 0),
+    windowStartedAt: toIso(row.window_started_at),
+    lastFailedAt: toIso(row.last_failed_at),
+    blockedUntil: toIso(row.blocked_until),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  };
+}
+
+export async function clearLoginAttemptState(scope, email, ipAddress) {
+  const normalizedScope = String(scope ?? "").trim();
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
+  const normalizedIpAddress = String(ipAddress ?? "").trim();
+
+  if (!normalizedScope || !normalizedEmail || !normalizedIpAddress) {
+    return;
+  }
+
+  await query(
+    `
+      DELETE FROM login_attempts
+      WHERE scope = $1
+        AND email = $2
+        AND ip_address = $3
+    `,
+    [normalizedScope, normalizedEmail, normalizedIpAddress]
+  );
+}
+
+export async function registerFailedLoginAttempt(payload) {
+  const normalizedScope = String(payload.scope ?? "").trim();
+  const normalizedEmail = String(payload.email ?? "").trim().toLowerCase();
+  const normalizedIpAddress = String(payload.ipAddress ?? "").trim();
+  const maxFailures = Number(payload.maxFailures);
+  const windowMinutes = Number(payload.windowMinutes);
+  const blockMinutes = Number(payload.blockMinutes);
+
+  if (!normalizedScope || !normalizedEmail || !normalizedIpAddress) {
+    return null;
+  }
+
+  const now = new Date();
+  const nowMs = now.getTime();
+  const nowIso = now.toISOString();
+  const windowMs = windowMinutes * 60 * 1000;
+  const blockMs = blockMinutes * 60 * 1000;
+
+  return transaction(async (client) => {
+    const existing = await execute(
+      client,
+      `
+        SELECT *
+        FROM login_attempts
+        WHERE scope = $1
+          AND email = $2
+          AND ip_address = $3
+        FOR UPDATE
+      `,
+      [normalizedScope, normalizedEmail, normalizedIpAddress]
+    );
+
+    const row = existing.rows[0] ?? null;
+    if (!row) {
+      const id = generateId("login-attempt");
+      const blockedUntilIso =
+        maxFailures <= 1 ? new Date(nowMs + blockMs).toISOString() : null;
+
+      await execute(
+        client,
+        `
+          INSERT INTO login_attempts (
+            id, scope, email, ip_address, failure_count, window_started_at, last_failed_at,
+            blocked_until, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `,
+        [
+          id,
+          normalizedScope,
+          normalizedEmail,
+          normalizedIpAddress,
+          1,
+          nowIso,
+          nowIso,
+          blockedUntilIso,
+          nowIso,
+          nowIso,
+        ]
+      );
+
+      return {
+        id,
+        scope: normalizedScope,
+        email: normalizedEmail,
+        ipAddress: normalizedIpAddress,
+        failureCount: 1,
+        windowStartedAt: nowIso,
+        lastFailedAt: nowIso,
+        blockedUntil: blockedUntilIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+    }
+
+    const existingBlockedUntilMs = row.blocked_until ? new Date(row.blocked_until).getTime() : null;
+    const existingWindowStartedMs = row.window_started_at
+      ? new Date(row.window_started_at).getTime()
+      : nowMs;
+    const shouldResetWindow =
+      !Number.isFinite(existingWindowStartedMs) || nowMs - existingWindowStartedMs >= windowMs;
+    const isExistingBlockExpired =
+      existingBlockedUntilMs !== null && Number.isFinite(existingBlockedUntilMs)
+        ? existingBlockedUntilMs <= nowMs
+        : false;
+
+    const nextWindowStartedAt = shouldResetWindow ? nowIso : toIso(row.window_started_at) ?? nowIso;
+    const baseFailureCount = shouldResetWindow || isExistingBlockExpired ? 0 : Number(row.failure_count ?? 0);
+    const nextFailureCount = baseFailureCount + 1;
+    const nextBlockedUntil =
+      nextFailureCount >= maxFailures ? new Date(nowMs + blockMs).toISOString() : null;
+
+    await execute(
+      client,
+      `
+        UPDATE login_attempts
+        SET
+          failure_count = $1,
+          window_started_at = $2,
+          last_failed_at = $3,
+          blocked_until = $4,
+          updated_at = $5
+        WHERE id = $6
+      `,
+      [nextFailureCount, nextWindowStartedAt, nowIso, nextBlockedUntil, nowIso, row.id]
+    );
+
+    return {
+      id: row.id,
+      scope: normalizedScope,
+      email: normalizedEmail,
+      ipAddress: normalizedIpAddress,
+      failureCount: nextFailureCount,
+      windowStartedAt: nextWindowStartedAt,
+      lastFailedAt: nowIso,
+      blockedUntil: nextBlockedUntil,
+      createdAt: toIso(row.created_at),
+      updatedAt: nowIso,
+    };
+  });
 }
 
 export async function createPasswordResetCode(userId, email, code, expiresAt) {

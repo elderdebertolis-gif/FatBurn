@@ -4,6 +4,7 @@ import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildOpenApiSpec, renderSwaggerUiHtml } from "./openapi.js";
 import {
+  clearLoginAttemptState,
   createExercise,
   createInstructor,
   createPasswordResetCode,
@@ -15,6 +16,7 @@ import {
   findExerciseById,
   findInstructorRowByEmail,
   findInstructorRowById,
+  getLoginAttemptState,
   findSessionByToken,
   findUserRowByEmail,
   findUserRowById,
@@ -24,6 +26,7 @@ import {
   listInstructors,
   listExercises,
   recalculateWorkoutPlan,
+  registerFailedLoginAttempt,
   registerUser,
   revokeSession,
   revokeSessionsForUser,
@@ -61,6 +64,9 @@ const host = "0.0.0.0";
 const USER_SESSION_TTL_HOURS = 24 * 14;
 const INSTRUCTOR_SESSION_TTL_HOURS = 12;
 const RESEND_API_URL = "https://api.resend.com/emails";
+const LOGIN_RATE_LIMIT_MAX_FAILURES = 5;
+const LOGIN_RATE_LIMIT_WINDOW_MINUTES = 15;
+const LOGIN_RATE_LIMIT_BLOCK_MINUTES = 15;
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -81,10 +87,11 @@ function buildCorsHeaders() {
   };
 }
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, extraHeaders = {}) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     ...buildCorsHeaders(),
+    ...extraHeaders,
   });
   response.end(JSON.stringify(payload));
 }
@@ -116,6 +123,69 @@ async function readBody(request) {
 
 function normalizeEmail(value = "") {
   return value.trim().toLowerCase();
+}
+
+function getRequestIp(request) {
+  const forwardedFor = request.headers["x-forwarded-for"];
+  const rawIp =
+    (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor)?.split(",")[0]?.trim() ||
+    request.socket?.remoteAddress ||
+    "unknown";
+
+  return rawIp.startsWith("::ffff:") ? rawIp.slice(7) : rawIp;
+}
+
+function getRetryAfterSeconds(blockedUntil) {
+  const blockedUntilMs = blockedUntil ? new Date(blockedUntil).getTime() : Number.NaN;
+  if (!Number.isFinite(blockedUntilMs)) {
+    return 0;
+  }
+
+  return Math.max(1, Math.ceil((blockedUntilMs - Date.now()) / 1000));
+}
+
+async function getActiveLoginBlock(scope, email, ipAddress) {
+  const state = await getLoginAttemptState(scope, email, ipAddress);
+  if (!state?.blockedUntil) {
+    return null;
+  }
+
+  if (new Date(state.blockedUntil).getTime() <= Date.now()) {
+    return null;
+  }
+
+  return state;
+}
+
+function sendLoginRateLimitResponse(response, blockedUntil) {
+  const retryAfterSeconds = getRetryAfterSeconds(blockedUntil);
+  sendJson(
+    response,
+    429,
+    {
+      error: "Muitas tentativas de login. Aguarde alguns minutos antes de tentar novamente.",
+      retryAfterSeconds,
+    },
+    { "Retry-After": String(retryAfterSeconds) }
+  );
+}
+
+async function registerFailedLoginAndMaybeBlock(response, scope, email, ipAddress) {
+  const state = await registerFailedLoginAttempt({
+    scope,
+    email,
+    ipAddress,
+    maxFailures: LOGIN_RATE_LIMIT_MAX_FAILURES,
+    windowMinutes: LOGIN_RATE_LIMIT_WINDOW_MINUTES,
+    blockMinutes: LOGIN_RATE_LIMIT_BLOCK_MINUTES,
+  });
+
+  if (state?.blockedUntil && new Date(state.blockedUntil).getTime() > Date.now()) {
+    sendLoginRateLimitResponse(response, state.blockedUntil);
+    return true;
+  }
+
+  return false;
 }
 
 function escapeHtml(value = "") {
@@ -642,17 +712,33 @@ createServer(async (request, response) => {
       const payload = await readBody(request);
       const email = normalizeEmail(payload.email);
       const password = (payload.password ?? "").trim();
+      const ipAddress = getRequestIp(request);
+      const blockedAttempt = await getActiveLoginBlock("user", email, ipAddress);
+
+      if (blockedAttempt) {
+        sendLoginRateLimitResponse(response, blockedAttempt.blockedUntil);
+        return;
+      }
+
       const user = await findUserRowByEmail(email);
 
       if (!user) {
+        if (await registerFailedLoginAndMaybeBlock(response, "user", email, ipAddress)) {
+          return;
+        }
         sendJson(response, 404, { error: "Usuario nao encontrado." });
         return;
       }
 
       if (!verifyPassword(password, user.passwordHash)) {
+        if (await registerFailedLoginAndMaybeBlock(response, "user", email, ipAddress)) {
+          return;
+        }
         sendJson(response, 401, { error: "Senha invalida." });
         return;
       }
+
+      await clearLoginAttemptState("user", email, ipAddress);
 
       const token = issueSessionToken();
       const session = await createSession({
@@ -682,22 +768,41 @@ createServer(async (request, response) => {
       const payload = await readBody(request);
       const email = normalizeEmail(payload.email);
       const password = (payload.password ?? "").trim();
+      const ipAddress = getRequestIp(request);
+      const blockedAttempt = await getActiveLoginBlock("instructor", email, ipAddress);
+
+      if (blockedAttempt) {
+        sendLoginRateLimitResponse(response, blockedAttempt.blockedUntil);
+        return;
+      }
+
       const instructor = await findInstructorRowByEmail(email);
 
       if (!instructor) {
+        if (await registerFailedLoginAndMaybeBlock(response, "instructor", email, ipAddress)) {
+          return;
+        }
         sendJson(response, 404, { error: "Instrutor nao encontrado." });
         return;
       }
 
       if (!instructor.isActive) {
+        if (await registerFailedLoginAndMaybeBlock(response, "instructor", email, ipAddress)) {
+          return;
+        }
         sendJson(response, 403, { error: "Esse acesso do portal esta inativo." });
         return;
       }
 
       if (!verifyPassword(password, instructor.passwordHash)) {
+        if (await registerFailedLoginAndMaybeBlock(response, "instructor", email, ipAddress)) {
+          return;
+        }
         sendJson(response, 401, { error: "Senha invalida." });
         return;
       }
+
+      await clearLoginAttemptState("instructor", email, ipAddress);
 
       const token = issueSessionToken();
       const session = await createSession({

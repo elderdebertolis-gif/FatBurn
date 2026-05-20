@@ -182,6 +182,17 @@ const spec = {
         description: "Recurso nao encontrado",
         content: json(ErrorResponse),
       },
+      TooManyRequests: {
+        description: "Muitas tentativas em um curto periodo",
+        content: json({
+          type: "object",
+          properties: {
+            error: { type: "string" },
+            retryAfterSeconds: { type: "integer" },
+          },
+          required: ["error", "retryAfterSeconds"],
+        }),
+      },
     },
   },
   paths: {},
@@ -230,6 +241,7 @@ Object.assign(spec.paths, {
         },
         401: { $ref: "#/components/responses/Unauthorized" },
         404: { $ref: "#/components/responses/NotFound" },
+        429: { $ref: "#/components/responses/TooManyRequests" },
       },
     },
   },
@@ -255,6 +267,7 @@ Object.assign(spec.paths, {
         401: { $ref: "#/components/responses/Unauthorized" },
         403: { $ref: "#/components/responses/Forbidden" },
         404: { $ref: "#/components/responses/NotFound" },
+        429: { $ref: "#/components/responses/TooManyRequests" },
       },
     },
   },
