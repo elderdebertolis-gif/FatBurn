@@ -1399,7 +1399,7 @@ async function savePortalUser() {
 }
 
 async function savePortalUserEdit(button) {
-  const editor = button.closest("[data-portal-user-id]");
+  const editor = button.closest(".editor-body[data-portal-user-id]");
   const portalUserId = editor?.dataset.portalUserId;
   if (!editor || !portalUserId) {
     return;
@@ -1425,7 +1425,7 @@ async function savePortalUserEdit(button) {
 }
 
 async function saveExerciseEdit(button) {
-  const editor = button.closest("[data-exercise-id]");
+  const editor = button.closest(".editor-body[data-exercise-id]");
   const exerciseId = editor?.dataset.exerciseId;
   if (!editor || !exerciseId) {
     return;
@@ -1445,7 +1445,7 @@ async function saveExerciseEdit(button) {
 }
 
 async function saveUser(button) {
-  const editor = button.closest("[data-user-id]");
+  const editor = button.closest(".editor-body[data-user-id]");
   const userId = editor?.dataset.userId;
   if (!editor || !userId) {
     return;
