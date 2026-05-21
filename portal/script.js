@@ -83,6 +83,20 @@ const environmentLabels = {
 };
 
 const groupLabels = Object.fromEntries(groups.map((group) => [group.value, group.label]));
+const eyeIconMarkup = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path>
+    <circle cx="12" cy="12" r="3"></circle>
+  </svg>
+`;
+const eyeOffIconMarkup = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m3 3 18 18"></path>
+    <path d="M10.6 5.1A12.4 12.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-4.1 4.9"></path>
+    <path d="M6.7 6.7C4.2 8.4 2.7 12 2.7 12A17.3 17.3 0 0 0 12 19c1.8 0 3.4-.4 4.8-1.1"></path>
+    <path d="M9.9 9.9A3 3 0 0 0 14 14.1"></path>
+  </svg>
+`;
 
 const screenDefinitions = {
   dashboard: {
@@ -162,6 +176,71 @@ function optionMarkup(options, selectedValue) {
         }>${escapeHtml(option.label)}</option>`
     )
     .join("");
+}
+
+function getPasswordToggleMarkup(disabled = false) {
+  return `
+    <button
+      class="password-toggle"
+      data-password-toggle
+      type="button"
+      aria-label="Mostrar senha"
+      title="Mostrar senha"
+      ${disabled ? "disabled" : ""}
+    >
+      ${eyeIconMarkup}
+    </button>
+  `;
+}
+
+function wrapPasswordInput(inputMarkup, disabled = false) {
+  return `<div class="password-input">${inputMarkup}${getPasswordToggleMarkup(disabled)}</div>`;
+}
+
+function syncPasswordToggleButton(button, visible) {
+  button.dataset.visible = visible ? "true" : "false";
+  button.setAttribute("aria-label", visible ? "Ocultar senha" : "Mostrar senha");
+  button.setAttribute("title", visible ? "Ocultar senha" : "Mostrar senha");
+  button.innerHTML = visible ? eyeOffIconMarkup : eyeIconMarkup;
+}
+
+function togglePasswordVisibility(button) {
+  const wrapper = button.closest(".password-input");
+  const input = wrapper?.querySelector("input");
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+
+  const visible = input.type === "password";
+  input.type = visible ? "text" : "password";
+  syncPasswordToggleButton(button, visible);
+}
+
+function getPasswordValidationError(password, confirmPassword, required = false) {
+  const passwordValue = String(password ?? "").trim();
+  const confirmValue = String(confirmPassword ?? "").trim();
+
+  if (required && !passwordValue) {
+    return "Preencha a senha para continuar.";
+  }
+
+  if (!passwordValue && !confirmValue) {
+    return null;
+  }
+
+  if (passwordValue.length < 8) {
+    return "A senha deve ter pelo menos 8 caracteres.";
+  }
+
+  if (!passwordValue || !confirmValue) {
+    return "Confirme a senha para continuar.";
+  }
+
+  if (passwordValue !== confirmValue) {
+    return "As senhas informadas nao conferem.";
+  }
+
+  return null;
 }
 
 function populateGroups() {
@@ -873,7 +952,17 @@ function renderUsers() {
               </label>
               <label>
                 <span>Nova senha temporaria</span>
-                <input data-field="password" type="password" value="" placeholder="Opcional" ${!canEditStudents ? "disabled" : ""} />
+                ${wrapPasswordInput(
+                  `<input data-field="password" type="password" value="" placeholder="Opcional" ${!canEditStudents ? "disabled" : ""} />`,
+                  !canEditStudents
+                )}
+              </label>
+              <label>
+                <span>Confirmar nova senha</span>
+                ${wrapPasswordInput(
+                  `<input data-field="confirmPassword" type="password" value="" placeholder="Repita a senha" ${!canEditStudents ? "disabled" : ""} />`,
+                  !canEditStudents
+                )}
               </label>
               <label>
                 <span>Idade</span>
@@ -1163,7 +1252,17 @@ function renderPortalUsers() {
             </label>
             <label>
               <span>Nova senha</span>
-              <input data-field="password" type="password" value="" placeholder="Opcional" ${!canEditThisUser ? "disabled" : ""} />
+              ${wrapPasswordInput(
+                `<input data-field="password" type="password" value="" placeholder="Opcional" ${!canEditThisUser ? "disabled" : ""} />`,
+                !canEditThisUser
+              )}
+            </label>
+            <label>
+              <span>Confirmar nova senha</span>
+              ${wrapPasswordInput(
+                `<input data-field="confirmPassword" type="password" value="" placeholder="Repita a senha" ${!canEditThisUser ? "disabled" : ""} />`,
+                !canEditThisUser
+              )}
             </label>
             <label>
               <span>Perfil</span>
@@ -1372,6 +1471,7 @@ async function savePortalUser() {
     name: $("#portal-user-name").value.trim(),
     email: $("#portal-user-email").value.trim().toLowerCase(),
     password: $("#portal-user-password").value.trim(),
+    confirmPassword: $("#portal-user-confirm-password").value.trim(),
     role: $("#portal-user-role").value,
     permissions: getSelectedPermissions($("#portal-user-permissions")),
     isActive: $("#portal-user-active").checked,
@@ -1382,14 +1482,28 @@ async function savePortalUser() {
     return;
   }
 
+  const passwordError = getPasswordValidationError(
+    payload.password,
+    payload.confirmPassword,
+    true
+  );
+  if (passwordError) {
+    showNotice(passwordError, "error");
+    return;
+  }
+
   await request("/api/portal-users", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      confirmPassword: undefined,
+    }),
   });
 
   $("#portal-user-name").value = "";
   $("#portal-user-email").value = "";
   $("#portal-user-password").value = "";
+  $("#portal-user-confirm-password").value = "";
   $("#portal-user-role").value = "instrutor";
   $("#portal-user-active").checked = true;
   syncCreatePortalUserPermissions();
@@ -1411,13 +1525,23 @@ async function savePortalUserEdit(button) {
     ...raw,
     email: String(raw.email ?? "").trim().toLowerCase(),
     password: String(raw.password ?? "").trim(),
+    confirmPassword: String(raw.confirmPassword ?? "").trim(),
     permissions: permissionsRoot ? getSelectedPermissions(permissionsRoot) : [],
     isActive: Boolean(raw.isActive),
   };
 
+  const passwordError = getPasswordValidationError(payload.password, payload.confirmPassword);
+  if (passwordError) {
+    showNotice(passwordError, "error");
+    return;
+  }
+
   await request(`/api/portal-users/${portalUserId}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      confirmPassword: undefined,
+    }),
   });
 
   await loadAll();
@@ -1459,12 +1583,22 @@ async function saveUser(button) {
     weightKg: Number(raw.weightKg),
     targetWeightKg: Number(raw.targetWeightKg),
     trainingDaysPerWeek: Number(raw.trainingDaysPerWeek),
+    confirmPassword: String(raw.confirmPassword ?? "").trim(),
     ...(raw.password?.trim() ? { password: raw.password.trim() } : {}),
   };
 
+  const passwordError = getPasswordValidationError(payload.password, payload.confirmPassword);
+  if (passwordError) {
+    showNotice(passwordError, "error");
+    return;
+  }
+
   await request(`/api/users/${userId}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      confirmPassword: undefined,
+    }),
   });
 
   await loadAll();
@@ -1592,6 +1726,12 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const passwordToggle = event.target.closest("[data-password-toggle]");
+  if (passwordToggle) {
+    togglePasswordVisibility(passwordToggle);
+    return;
+  }
+
   const navButton = event.target.closest("[data-screen-target]");
   if (navButton) {
     setActiveScreen(navButton.dataset.screenTarget);

@@ -82,6 +82,52 @@ textarea {
   resize: vertical;
 }
 
+.password-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input input {
+  padding-right: 52px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  display: grid;
+  place-items: center;
+}
+
+.password-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.password-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .hidden {
   display: none !important;
 }

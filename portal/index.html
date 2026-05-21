@@ -31,7 +31,21 @@
           </label>
           <label>
             <span>Senha</span>
-            <input id="portal-login-password" type="password" placeholder="********" />
+            <div class="password-input">
+              <input id="portal-login-password" type="password" placeholder="********" />
+              <button
+                class="password-toggle"
+                data-password-toggle
+                type="button"
+                aria-label="Mostrar senha"
+                title="Mostrar senha"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
           </label>
         </div>
         <div class="actions">
@@ -297,11 +311,47 @@
                     </label>
                     <label>
                       <span>Senha inicial</span>
-                      <input
-                        id="portal-user-password"
-                        type="password"
-                        placeholder="Minimo 8 caracteres"
-                      />
+                      <div class="password-input">
+                        <input
+                          id="portal-user-password"
+                          type="password"
+                          placeholder="Minimo 8 caracteres"
+                        />
+                        <button
+                          class="password-toggle"
+                          data-password-toggle
+                          type="button"
+                          aria-label="Mostrar senha"
+                          title="Mostrar senha"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        </button>
+                      </div>
+                    </label>
+                    <label>
+                      <span>Confirmar senha inicial</span>
+                      <div class="password-input">
+                        <input
+                          id="portal-user-confirm-password"
+                          type="password"
+                          placeholder="Repita a senha"
+                        />
+                        <button
+                          class="password-toggle"
+                          data-password-toggle
+                          type="button"
+                          aria-label="Mostrar senha"
+                          title="Mostrar senha"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        </button>
+                      </div>
                     </label>
                     <label>
                       <span>Perfil</span>
