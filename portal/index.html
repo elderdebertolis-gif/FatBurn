@@ -96,61 +96,51 @@
               <div>
                 <p id="screen-eyebrow" class="eyebrow">Portal FatBurn</p>
                 <h1 id="screen-title">Home</h1>
-                <p id="screen-description" class="muted">
-                  Resumo do portal, indicadores principais e atalhos.
-                </p>
+                <p id="screen-description" class="muted">Resumo do portal e indicadores principais.</p>
               </div>
             </div>
           </header>
 
           <section id="screen-dashboard" class="screen">
             <div class="stats-grid">
-              <article class="stat-card">
+              <button
+                id="dashboard-card-students"
+                class="stat-card stat-shortcut"
+                data-screen-target="students"
+                type="button"
+              >
                 <span class="stat-label">Alunos</span>
                 <strong id="dashboard-students-total" class="stat-value">--</strong>
                 <p id="dashboard-students-copy" class="muted">Base de alunos.</p>
-              </article>
+                <span id="dashboard-students-action" class="stat-action">Abrir modulo</span>
+              </button>
 
-              <article class="stat-card">
+              <button
+                id="dashboard-card-exercises"
+                class="stat-card stat-shortcut"
+                data-screen-target="exercises"
+                type="button"
+              >
                 <span class="stat-label">Exercicios</span>
                 <strong id="dashboard-exercises-total" class="stat-value">--</strong>
                 <p id="dashboard-exercises-copy" class="muted">Biblioteca central do portal.</p>
-              </article>
+                <span id="dashboard-exercises-action" class="stat-action">Abrir modulo</span>
+              </button>
 
-              <article class="stat-card">
+              <button
+                id="dashboard-card-access"
+                class="stat-card stat-shortcut"
+                data-screen-target="access"
+                type="button"
+              >
                 <span class="stat-label">Acessos internos</span>
                 <strong id="dashboard-access-total" class="stat-value">--</strong>
                 <p id="dashboard-access-copy" class="muted">Usuarios com acesso ao portal.</p>
-              </article>
-
-              <article class="stat-card">
-                <span class="stat-label">Perfil atual</span>
-                <strong id="dashboard-role-value" class="stat-value">--</strong>
-                <p id="dashboard-role-copy" class="muted">Permissoes ativas desta sessao.</p>
-              </article>
+                <span id="dashboard-access-action" class="stat-action">Abrir modulo</span>
+              </button>
             </div>
 
             <div class="dashboard-grid">
-              <article class="card">
-                <div class="section-head">
-                  <div>
-                    <h2>Atalhos</h2>
-                    <p class="muted">Abra rapidamente cada modulo liberado para este acesso.</p>
-                  </div>
-                </div>
-                <div id="dashboard-shortcuts" class="shortcut-grid"></div>
-              </article>
-
-              <article class="card">
-                <div class="section-head">
-                  <div>
-                    <h2>Permissoes da sessao</h2>
-                    <p class="muted">Permissoes efetivas do usuario autenticado.</p>
-                  </div>
-                </div>
-                <div id="dashboard-permissions" class="summary-chips"></div>
-              </article>
-
               <article class="card">
                 <div class="section-head">
                   <div>
@@ -158,7 +148,7 @@
                     <p class="muted">Distribuicao dos planos cadastrados na base.</p>
                   </div>
                 </div>
-                <div id="dashboard-objectives" class="summary-list"></div>
+                <div id="dashboard-objectives" class="dashboard-chart"></div>
               </article>
 
               <article class="card">
@@ -168,7 +158,7 @@
                     <p class="muted">Separacao entre casa e academia.</p>
                   </div>
                 </div>
-                <div id="dashboard-environments" class="summary-list"></div>
+                <div id="dashboard-environments" class="dashboard-chart"></div>
               </article>
             </div>
           </section>

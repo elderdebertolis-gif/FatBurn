@@ -380,7 +380,7 @@ textarea {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -398,6 +398,32 @@ textarea {
   gap: 10px;
 }
 
+.stat-shortcut {
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.stat-shortcut:hover,
+.stat-shortcut:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.26);
+  outline: none;
+}
+
+.stat-shortcut.hidden {
+  display: none;
+}
+
 .stat-label {
   color: var(--muted);
   font-size: 12px;
@@ -409,6 +435,13 @@ textarea {
 .stat-value {
   font-size: clamp(26px, 3vw, 34px);
   line-height: 1;
+}
+
+.stat-action {
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .dashboard-grid {
@@ -493,6 +526,104 @@ textarea {
 .stack-sm {
   display: grid;
   gap: 12px;
+}
+
+.dashboard-chart {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
+
+.donut-chart {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+
+.donut-visual {
+  display: grid;
+  place-items: center;
+}
+
+.donut-ring {
+  width: min(100%, 240px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.donut-ring::after {
+  content: "";
+  width: 58%;
+  height: 58%;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.donut-hole {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  z-index: 1;
+  text-align: center;
+  padding: 24px;
+}
+
+.donut-hole strong {
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1;
+}
+
+.donut-hole span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.donut-legend {
+  display: grid;
+  gap: 12px;
+}
+
+.legend-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--card-soft);
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.legend-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.legend-total {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.legend-percent {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .summary-row {
@@ -773,6 +904,10 @@ label span {
   .dashboard-grid,
   .shortcut-grid,
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .donut-chart {
     grid-template-columns: 1fr;
   }
 

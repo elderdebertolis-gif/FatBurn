@@ -102,7 +102,7 @@ const screenDefinitions = {
   dashboard: {
     eyebrow: "Portal FatBurn",
     title: "Home",
-    description: "Resumo do portal, indicadores principais e atalhos.",
+    description: "Resumo do portal e indicadores principais.",
     available: () => true,
   },
   students: {
@@ -642,95 +642,118 @@ function countBy(items, resolveKey, labels) {
     .sort((a, b) => b[1] - a[1])
     .map(([key, total]) => ({
       label: labels[key] ?? key,
-      value: `${total}`,
+      total,
     }));
 }
 
+function renderDonutChart(container, entries, emptyMessage, centerLabel, colors) {
+  if (!container) {
+    return;
+  }
+
+  if (!entries.length) {
+    container.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+
+  const total = entries.reduce((sum, entry) => sum + entry.total, 0);
+  let offset = 0;
+  const gradient = entries
+    .map((entry, index) => {
+      const start = (offset / total) * 100;
+      offset += entry.total;
+      const end = (offset / total) * 100;
+      const color = colors[index % colors.length];
+      return `${color} ${start}% ${end}%`;
+    })
+    .join(", ");
+
+  container.innerHTML = `
+    <div class="donut-chart">
+      <div class="donut-visual">
+        <div class="donut-ring" style="background: conic-gradient(${gradient});">
+          <div class="donut-hole">
+            <strong>${escapeHtml(total)}</strong>
+            <span>${escapeHtml(centerLabel)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="donut-legend">
+        ${entries
+          .map((entry, index) => {
+            const color = colors[index % colors.length];
+            const percent = ((entry.total / total) * 100).toFixed(1);
+            return `
+              <div class="legend-row">
+                <span class="legend-swatch" style="background:${color}"></span>
+                <span class="legend-label">${escapeHtml(entry.label)}</span>
+                <strong class="legend-total">${escapeHtml(entry.total)}</strong>
+                <span class="legend-percent">${escapeHtml(percent)}%</span>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboard() {
-  const currentRole = portalRoleLabels[state.instructor?.role] ?? "--";
-  const permissions = getCurrentPermissions();
   const canReadStudents = hasPermission("students.read");
   const canReadExercises = hasPermission("exercises.read");
   const canReadPortalUsers = hasPermission("portal_users.read");
 
-  $("#dashboard-role-value").textContent = currentRole;
-  $("#dashboard-role-copy").textContent = `${permissions.length} permissao(oes) ativa(s) nesta sessao.`;
-
   $("#dashboard-students-total").textContent = canReadStudents ? String(state.users.length) : "--";
   $("#dashboard-students-copy").textContent = canReadStudents
-    ? "Cadastros visiveis no portal."
-    : "Sem permissao para listar alunos.";
+    ? "Cadastros, edicao de perfil e treino semanal."
+    : "Modulo indisponivel para este perfil.";
+  $("#dashboard-students-action").textContent = canReadStudents ? "Abrir modulo" : "Sem acesso";
 
   $("#dashboard-exercises-total").textContent = canReadExercises
     ? String(state.exercises.length)
     : "--";
   $("#dashboard-exercises-copy").textContent = canReadExercises
-    ? "Biblioteca disponivel para consulta."
-    : "Sem permissao para ver exercicios.";
+    ? "Biblioteca tecnica e manutencao dos videos."
+    : "Modulo indisponivel para este perfil.";
+  $("#dashboard-exercises-action").textContent = canReadExercises ? "Abrir modulo" : "Sem acesso";
 
   $("#dashboard-access-total").textContent = canReadPortalUsers
     ? String(state.portalUsers.length)
     : "--";
   $("#dashboard-access-copy").textContent = canReadPortalUsers
-    ? "Perfis internos cadastrados."
-    : "Acessos internos restritos.";
-
-  const shortcuts = getAvailableScreens()
-    .filter((screenKey) => screenKey !== "dashboard")
-    .map((screenKey) => ({
-      key: screenKey,
-      title: screenDefinitions[screenKey].title,
-      description: screenDefinitions[screenKey].description,
-    }));
-
-  const shortcutsContainer = $("#dashboard-shortcuts");
-  if (!shortcuts.length) {
-    shortcutsContainer.innerHTML =
-      "<div class='empty-state'>Nenhum modulo adicional liberado para este acesso.</div>";
-  } else {
-    shortcutsContainer.innerHTML = shortcuts
-      .map(
-        (shortcut) => `
-          <button class="shortcut-button" type="button" data-screen-target="${escapeHtml(shortcut.key)}">
-            <strong>${escapeHtml(shortcut.title)}</strong>
-            <span>${escapeHtml(shortcut.description)}</span>
-          </button>
-        `
-      )
-      .join("");
-  }
-
-  renderChips(
-    $("#dashboard-permissions"),
-    permissions.map((permission) => {
-      const label =
-        portalPermissionOptions.find((option) => option.value === permission)?.label ?? permission;
-      return label;
-    }),
-    "Este acesso ainda nao possui permissoes configuradas."
-  );
+    ? "Perfis internos, papeis e permissoes do portal."
+    : "Modulo indisponivel para este perfil.";
+  $("#dashboard-access-action").textContent = canReadPortalUsers ? "Abrir modulo" : "Sem acesso";
 
   if (canReadStudents) {
-    renderSummaryRows(
+    renderDonutChart(
       $("#dashboard-objectives"),
       countBy(state.users, (user) => user.objective, objectiveLabels),
-      "Nenhum aluno cadastrado ainda."
+      "Nenhum aluno cadastrado ainda.",
+      "alunos por objetivo",
+      ["#ff6a00", "#ff8b2d", "#ffb067", "#ffd3b0"]
     );
-    renderSummaryRows(
+    renderDonutChart(
       $("#dashboard-environments"),
       countBy(state.users, (user) => user.trainingEnvironment, environmentLabels),
-      "Nenhum ambiente de treino registrado ainda."
+      "Nenhum ambiente de treino registrado ainda.",
+      "alunos por ambiente",
+      ["#ff6a00", "#d9d9d9", "#8d8d8d"]
     );
   } else {
-    renderSummaryRows(
+    renderDonutChart(
       $("#dashboard-objectives"),
       [],
-      "Voce nao tem permissao para visualizar a distribuicao de alunos."
+      "Voce nao tem permissao para visualizar a distribuicao de alunos.",
+      "",
+      []
     );
-    renderSummaryRows(
+    renderDonutChart(
       $("#dashboard-environments"),
       [],
-      "Voce nao tem permissao para visualizar os ambientes dos alunos."
+      "Voce nao tem permissao para visualizar os ambientes dos alunos.",
+      "",
+      []
     );
   }
 }
