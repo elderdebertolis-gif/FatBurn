@@ -647,33 +647,47 @@ function countBy(items, resolveKey, labels) {
 }
 
 function toCircleMetrics(entries) {
-  const radius = 78;
-  const circumference = 2 * Math.PI * radius;
   const total = entries.reduce((sum, item) => sum + item.total, 0);
-  let offset = 0;
   let cumulativeRatio = 0;
 
   return {
-    radius,
-    circumference,
     total,
     segments: entries.map((entry) => {
       const ratio = total ? entry.total / total : 0;
-      const length = circumference * ratio;
       const startRatio = cumulativeRatio;
       cumulativeRatio += ratio;
-      const current = {
+      return {
         ...entry,
         ratio,
-        length,
-        offset,
         startRatio,
         endRatio: cumulativeRatio,
       };
-      offset += length;
-      return current;
     }),
   };
+}
+
+function polarToCartesian(cx, cy, radius, angleInDegrees) {
+  const angleInRadians = (angleInDegrees * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(angleInRadians),
+    y: cy + radius * Math.sin(angleInRadians),
+  };
+}
+
+function describeDonutSegment(cx, cy, outerRadius, innerRadius, startAngle, endAngle) {
+  const outerStart = polarToCartesian(cx, cy, outerRadius, startAngle);
+  const outerEnd = polarToCartesian(cx, cy, outerRadius, endAngle);
+  const innerEnd = polarToCartesian(cx, cy, innerRadius, startAngle);
+  const innerStart = polarToCartesian(cx, cy, innerRadius, endAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerStart.x} ${innerStart.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerEnd.x} ${innerEnd.y}`,
+    "Z",
+  ].join(" ");
 }
 
 function renderDonutChart(container, entries, emptyMessage, centerLabel, colors) {
@@ -687,7 +701,10 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   }
 
   const total = entries.reduce((sum, entry) => sum + entry.total, 0);
-  const { radius, circumference, segments } = toCircleMetrics(entries);
+  const { segments } = toCircleMetrics(entries);
+  const center = 110;
+  const outerRadius = 92;
+  const innerRadius = 54;
 
   container.innerHTML = `
     <div class="donut-chart">
@@ -703,29 +720,24 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
       <div class="donut-visual">
         <div class="donut-ring">
           <svg class="donut-svg" viewBox="0 0 220 220" aria-hidden="true">
-            <circle class="donut-track" cx="110" cy="110" r="${radius}"></circle>
+            <circle class="donut-track" cx="${center}" cy="${center}" r="73"></circle>
             ${segments
               .map((entry, index) => {
                 const color = colors[index % colors.length];
                 const percent = (entry.ratio * 100).toFixed(1);
+                const startAngle = -90 + entry.startRatio * 360;
+                const endAngle = -90 + entry.endRatio * 360;
                 return `
-                  <circle
+                  <path
                     class="donut-segment donut-interactive"
                     data-donut-index="${index}"
                     data-donut-label="${escapeHtml(entry.label)}"
                     data-donut-total="${escapeHtml(entry.total)}"
                     data-donut-percent="${escapeHtml(percent)}"
                     data-donut-color="${escapeHtml(color)}"
-                    data-donut-start="${entry.startRatio}"
-                    data-donut-end="${entry.endRatio}"
-                    cx="110"
-                    cy="110"
-                    r="${radius}"
-                    stroke="${color}"
-                    stroke-dasharray="${entry.length} ${Math.max(circumference - entry.length, 0)}"
-                    stroke-dashoffset="${-entry.offset}"
-                    transform="rotate(-90 110 110)"
-                  ></circle>
+                    fill="${color}"
+                    d="${describeDonutSegment(center, center, outerRadius, innerRadius, startAngle, endAngle)}"
+                  ></path>
                 `;
               })
               .join("")}
@@ -763,11 +775,8 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   const hoverTotal = container.querySelector("[data-donut-hover-total]");
   const hoverPercent = container.querySelector("[data-donut-hover-percent]");
   const hoverSwatch = container.querySelector("[data-donut-hover-swatch]");
-  const donutSvg = container.querySelector(".donut-svg");
   const segmentNodes = [...container.querySelectorAll(".donut-segment")];
   const legendNodes = [...container.querySelectorAll(".legend-row[data-donut-index]")];
-  const hitOuterRadius = radius + 22;
-  const hitInnerRadius = radius - 22;
 
   const setActive = (index, visible) => {
     segmentNodes.forEach((node) => {
@@ -806,47 +815,16 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     color: colors[index % colors.length],
   }));
 
-  const resolveSegmentFromEvent = (event) => {
-    if (!(donutSvg instanceof SVGElement)) {
-      return null;
-    }
-
-    const rect = donutSvg.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      return null;
-    }
-
-    const scaleX = 220 / rect.width;
-    const scaleY = 220 / rect.height;
-    const x = (event.clientX - rect.left) * scaleX - 110;
-    const y = (event.clientY - rect.top) * scaleY - 110;
-    const distance = Math.sqrt(x * x + y * y);
-
-    if (distance < hitInnerRadius || distance > hitOuterRadius) {
-      return null;
-    }
-
-    const angle = (Math.atan2(y, x) * 180) / Math.PI;
-    const normalized = (angle + 450) % 360;
-    const ratio = normalized / 360;
-
-    return (
-      segmentsWithMeta.find(
-        (segment) => ratio >= segment.startRatio && ratio < segment.endRatio
-      ) ?? segmentsWithMeta[segmentsWithMeta.length - 1]
-    );
-  };
-
-  donutSvg?.addEventListener("pointermove", (event) => {
-    const segment = resolveSegmentFromEvent(event);
-    if (!segment) {
-      hideHover();
-      return;
-    }
-    showHover(segment);
+  segmentNodes.forEach((node) => {
+    node.addEventListener("pointerenter", () => {
+      const segment = segmentsWithMeta[Number(node.dataset.donutIndex)];
+      if (segment) {
+        showHover(segment);
+      }
+    });
   });
 
-  donutSvg?.addEventListener("pointerleave", hideHover);
+  container.querySelector(".donut-visual")?.addEventListener("pointerleave", hideHover);
 
   if (window.matchMedia("(max-width: 720px)").matches && segmentsWithMeta[0]) {
     showHover(segmentsWithMeta[0]);

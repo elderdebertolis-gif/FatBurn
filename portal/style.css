@@ -585,21 +585,22 @@ textarea {
 .donut-track {
   fill: none;
   stroke: rgba(255, 255, 255, 0.06);
-  stroke-width: 36;
+  stroke-width: 38;
 }
 
 .donut-segment {
-  fill: none;
-  stroke-width: 36;
-  stroke-linecap: butt;
+  cursor: pointer;
   transition:
     filter 0.18s ease,
-    opacity 0.18s ease;
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  transform-origin: 110px 110px;
 }
 
 .donut-segment.active {
-  opacity: 0.88;
+  opacity: 0.94;
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.28));
+  transform: scale(1.01);
 }
 
 .donut-hole {
