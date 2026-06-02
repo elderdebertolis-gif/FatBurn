@@ -786,6 +786,7 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   const segmentNodes = [...container.querySelectorAll(".donut-segment")];
   const legendNodes = [...container.querySelectorAll(".legend-row[data-donut-index]")];
   const chartNode = container.querySelector(".donut-chart");
+  const ringNode = container.querySelector(".donut-ring");
 
   const setActive = (index, visible) => {
     segmentNodes.forEach((node) => {
@@ -824,6 +825,7 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     if (
       !hoverCard ||
       !chartNode ||
+      !ringNode ||
       window.matchMedia("(max-width: 720px)").matches ||
       !(event instanceof MouseEvent || event instanceof PointerEvent)
     ) {
@@ -831,19 +833,44 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     }
 
     const chartRect = chartNode.getBoundingClientRect();
+    const ringRect = ringNode.getBoundingClientRect();
     const hoverRect = hoverCard.getBoundingClientRect();
-    const offsetX = 18;
-    const offsetY = 18;
-    const maxLeft = Math.max(12, chartRect.width - hoverRect.width - 12);
-    const maxTop = Math.max(12, chartRect.height - hoverRect.height - 12);
-    const left = Math.min(
-      Math.max(12, event.clientX - chartRect.left + offsetX),
-      maxLeft
-    );
-    const top = Math.min(
-      Math.max(12, event.clientY - chartRect.top + offsetY),
-      maxTop
-    );
+    const padding = 12;
+    const cursorX = event.clientX - chartRect.left;
+    const cursorY = event.clientY - chartRect.top;
+    const centerX = ringRect.left - chartRect.left + ringRect.width / 2;
+    const centerY = ringRect.top - chartRect.top + ringRect.height / 2;
+    const dx = cursorX - centerX;
+    const dy = cursorY - centerY;
+    const angle = Math.atan2(dy || 0.001, dx || 0.001);
+    const orbitRadiusX = ringRect.width / 2 + 24;
+    const orbitRadiusY = ringRect.height / 2 + 24;
+    const anchorX = centerX + Math.cos(angle) * orbitRadiusX;
+    const anchorY = centerY + Math.sin(angle) * orbitRadiusY;
+    const horizontalBias = Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle));
+
+    let left;
+    let top;
+
+    if (horizontalBias) {
+      left =
+        Math.cos(angle) >= 0
+          ? anchorX + 14
+          : anchorX - hoverRect.width - 14;
+      top = anchorY - hoverRect.height / 2;
+    } else {
+      left = anchorX - hoverRect.width / 2;
+      top =
+        Math.sin(angle) >= 0
+          ? anchorY + 14
+          : anchorY - hoverRect.height - 14;
+    }
+
+    const maxLeft = Math.max(padding, chartRect.width - hoverRect.width - padding);
+    const maxTop = Math.max(padding, chartRect.height - hoverRect.height - padding);
+
+    left = Math.min(Math.max(padding, left), maxLeft);
+    top = Math.min(Math.max(padding, top), maxTop);
 
     hoverCard.style.left = `${left}px`;
     hoverCard.style.top = `${top}px`;
