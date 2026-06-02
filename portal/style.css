@@ -647,6 +647,7 @@ textarea {
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--card-soft);
+  cursor: pointer;
   transition:
     border-color 0.18s ease,
     transform 0.18s ease,

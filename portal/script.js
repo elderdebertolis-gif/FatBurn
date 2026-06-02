@@ -824,6 +824,22 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     node.addEventListener("mousemove", syncFromNode);
   });
 
+  legendNodes.forEach((node) => {
+    const syncFromLegend = () => {
+      const segment = segmentsWithMeta[Number(node.dataset.donutIndex)];
+      if (segment) {
+        showHover(segment);
+      }
+    };
+
+    node.addEventListener("mouseenter", syncFromLegend);
+    node.addEventListener("pointerenter", syncFromLegend);
+    node.addEventListener("pointermove", syncFromLegend);
+    node.addEventListener("mousemove", syncFromLegend);
+    node.addEventListener("mouseleave", hideHover);
+    node.addEventListener("pointerleave", hideHover);
+  });
+
   const visualNode = container.querySelector(".donut-visual");
   visualNode?.addEventListener("mouseleave", hideHover);
   visualNode?.addEventListener("pointerleave", hideHover);
