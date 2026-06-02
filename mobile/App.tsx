@@ -1583,9 +1583,9 @@ export default function App() {
     return (
       <SafeAreaView style={[styles.loadingScreen, { paddingTop: ANDROID_TOP_OFFSET }]}>
         <StatusBar style="light" translucent={false} backgroundColor="#1A1A1A" />
-        <BrandWordmark centered />
-        <ActivityIndicator size="large" color="#ff6a00" />
         <Text style={styles.loadingText}>Conectando seu plano.</Text>
+        <ActivityIndicator size="large" color="#ff6a00" />
+        <BrandWordmark centered />
       </SafeAreaView>
     );
   }
@@ -1815,8 +1815,8 @@ export default function App() {
         )
       : replacementOptions;
   const activeVideoId = videoContext ? extractYouTubeVideoId(videoContext.url) : null;
-  const videoPlayerWidth = Math.max(200, Math.floor(windowWidth - 28));
-  const videoPlayerHeight = Math.max(200, Math.round((videoPlayerWidth * 9) / 16));
+  const videoPlayerWidth = Math.max(200, Math.floor(Math.min(windowWidth - 60, 520)));
+  const videoPlayerHeight = Math.max(180, Math.round((videoPlayerWidth * 9) / 16));
 
   function renderDashboard() {
     return (
@@ -2565,69 +2565,79 @@ export default function App() {
 
       <Modal
         animationType="slide"
+        transparent
+        statusBarTranslucent
         visible={videoContext !== null}
         onRequestClose={() => setVideoContext(null)}
       >
-        <View style={styles.videoScreen}>
-          <View style={styles.videoScreenHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.videoScreenTitle}>Video do exercicio</Text>
-              <Text style={styles.videoScreenSubtitle}>{videoContext?.title ?? ""}</Text>
+        <View
+          style={[
+            styles.videoModalOverlay,
+            { paddingTop: ANDROID_TOP_OFFSET + 16, paddingBottom: TAB_BAR_OFFSET + 16 },
+          ]}
+        >
+          <View style={styles.videoSheet}>
+            <View style={styles.videoSheetHandle} />
+            <View style={styles.videoScreenHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.videoScreenTitle}>Video do exercicio</Text>
+                <Text style={styles.videoScreenSubtitle}>{videoContext?.title ?? ""}</Text>
+              </View>
+              <Pressable style={styles.videoScreenClose} onPress={() => setVideoContext(null)}>
+                <Text style={styles.videoScreenCloseText}>Fechar</Text>
+              </Pressable>
             </View>
-            <Pressable style={styles.videoScreenClose} onPress={() => setVideoContext(null)}>
-              <Text style={styles.videoScreenCloseText}>Fechar</Text>
-            </Pressable>
-          </View>
 
-          <View style={styles.videoScreenFrame}>
-            {videoContext ? (
-              activeVideoId ? (
-                <YoutubePlayer
-                  key={activeVideoId}
-                  height={videoPlayerHeight}
-                  width={videoPlayerWidth}
-                  videoId={activeVideoId}
-                  play
-                  useLocalHTML={false}
-                  initialPlayerParams={{
-                    controls: true,
-                    rel: false,
-                    loop: false,
-                  }}
-                  webViewStyle={styles.videoWebView}
-                  webViewProps={{
-                    allowsFullscreenVideo: true,
-                    cacheEnabled: false,
-                  }}
-                  onError={(error: string) => {
-                    setNotice({
-                      title: "Video indisponivel",
-                      message: `O player retornou: ${error}`,
-                      tone: "error",
-                    });
-                  }}
-                />
-              ) : (
-                <WebView
-                  key={videoContext.url}
-                  source={{
-                    html: buildDirectVideoHtml(videoContext.url),
-                  }}
-                  style={styles.videoWebView}
-                  originWhitelist={["*"]}
-                  javaScriptEnabled
-                  domStorageEnabled
-                  allowsFullscreenVideo
-                  allowsInlineMediaPlayback
-                  setSupportMultipleWindows={false}
-                  mediaPlaybackRequiresUserAction={false}
-                  startInLoadingState
-                  cacheEnabled={false}
-                  scrollEnabled={false}
-                  bounces={false}
-                />
-              )
-            ) : null}
+            <View style={[styles.videoScreenFrame, { width: videoPlayerWidth, height: videoPlayerHeight }]}>
+              {videoContext ? (
+                activeVideoId ? (
+                  <YoutubePlayer
+                    key={activeVideoId}
+                    height={videoPlayerHeight}
+                    width={videoPlayerWidth}
+                    videoId={activeVideoId}
+                    play
+                    useLocalHTML={false}
+                    initialPlayerParams={{
+                      controls: true,
+                      rel: false,
+                      loop: false,
+                    }}
+                    webViewStyle={styles.videoWebView}
+                    webViewProps={{
+                      allowsFullscreenVideo: true,
+                      cacheEnabled: false,
+                    }}
+                    onError={(error: string) => {
+                      setNotice({
+                        title: "Video indisponivel",
+                        message: `O player retornou: ${error}`,
+                        tone: "error",
+                      });
+                    }}
+                  />
+                ) : (
+                  <WebView
+                    key={videoContext.url}
+                    source={{
+                      html: buildDirectVideoHtml(videoContext.url),
+                    }}
+                    style={styles.videoWebView}
+                    originWhitelist={["*"]}
+                    javaScriptEnabled
+                    domStorageEnabled
+                    allowsFullscreenVideo
+                    allowsInlineMediaPlayback
+                    setSupportMultipleWindows={false}
+                    mediaPlaybackRequiresUserAction={false}
+                    startInLoadingState
+                    cacheEnabled={false}
+                    scrollEnabled={false}
+                    bounces={false}
+                  />
+                )
+              ) : null}
+            </View>
           </View>
         </View>
       </Modal>
