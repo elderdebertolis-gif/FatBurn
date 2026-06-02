@@ -705,6 +705,12 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   const center = 110;
   const outerRadius = 92;
   const innerRadius = 54;
+  const overlapAngle = 0.35;
+  const segmentsWithMeta = segments.map((segment, index) => ({
+    ...segment,
+    index,
+    color: colors[index % colors.length],
+  }));
 
   container.innerHTML = `
     <div class="donut-chart">
@@ -721,21 +727,23 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
         <div class="donut-ring">
           <svg class="donut-svg" viewBox="0 0 220 220" aria-hidden="true">
             <circle class="donut-track" cx="${center}" cy="${center}" r="73"></circle>
-            ${segments
-              .map((entry, index) => {
-                const color = colors[index % colors.length];
+            ${segmentsWithMeta
+              .map((entry) => {
                 const percent = (entry.ratio * 100).toFixed(1);
-                const startAngle = -90 + entry.startRatio * 360;
-                const endAngle = -90 + entry.endRatio * 360;
+                const startAngle = -90 + entry.startRatio * 360 - overlapAngle;
+                const endAngle = -90 + entry.endRatio * 360 + overlapAngle;
                 return `
                   <path
                     class="donut-segment donut-interactive"
-                    data-donut-index="${index}"
+                    data-donut-index="${entry.index}"
                     data-donut-label="${escapeHtml(entry.label)}"
                     data-donut-total="${escapeHtml(entry.total)}"
                     data-donut-percent="${escapeHtml(percent)}"
-                    data-donut-color="${escapeHtml(color)}"
-                    fill="${color}"
+                    data-donut-color="${escapeHtml(entry.color)}"
+                    fill="${entry.color}"
+                    stroke="${entry.color}"
+                    stroke-width="2"
+                    stroke-linejoin="round"
                     d="${describeDonutSegment(center, center, outerRadius, innerRadius, startAngle, endAngle)}"
                   ></path>
                 `;
@@ -833,19 +841,16 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     showBaseState();
   };
 
-  const segmentsWithMeta = segments.map((segment, index) => ({
-    ...segment,
-    index,
-    color: colors[index % colors.length],
-  }));
-
   segmentNodes.forEach((node) => {
-    node.addEventListener("pointerenter", () => {
+    const syncFromNode = () => {
       const segment = segmentsWithMeta[Number(node.dataset.donutIndex)];
       if (segment) {
         showHover(segment);
       }
-    });
+    };
+
+    node.addEventListener("pointerenter", syncFromNode);
+    node.addEventListener("pointermove", syncFromNode);
   });
 
   container.querySelector(".donut-visual")?.addEventListener("pointerleave", hideHover);

@@ -590,17 +590,19 @@ textarea {
 
 .donut-segment {
   cursor: pointer;
+  pointer-events: all;
   transition:
     filter 0.18s ease,
     opacity 0.18s ease,
     transform 0.18s ease;
   transform-origin: 110px 110px;
+  paint-order: stroke fill;
 }
 
 .donut-segment.active {
   opacity: 0.94;
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.28));
-  transform: scale(1.01);
+  transform: scale(1.005);
 }
 
 .donut-hole {
