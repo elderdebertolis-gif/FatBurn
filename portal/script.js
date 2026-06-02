@@ -649,13 +649,15 @@ function countBy(items, resolveKey, labels) {
 function toCircleMetrics(entries) {
   const radius = 78;
   const circumference = 2 * Math.PI * radius;
+  const total = entries.reduce((sum, item) => sum + item.total, 0);
   let offset = 0;
 
   return {
     radius,
     circumference,
+    total,
     segments: entries.map((entry) => {
-      const ratio = entry.total / entries.reduce((sum, item) => sum + item.total, 0);
+      const ratio = total ? entry.total / total : 0;
       const length = circumference * ratio;
       const current = {
         ...entry,
@@ -789,8 +791,10 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   };
 
   interactiveNodes.forEach((node) => {
-    node.addEventListener("mouseenter", () => showHover(node));
-    node.addEventListener("mouseleave", hideHover);
+    node.addEventListener("pointerenter", () => showHover(node));
+    node.addEventListener("pointerleave", hideHover);
+    node.addEventListener("focus", () => showHover(node));
+    node.addEventListener("blur", hideHover);
   });
 
   if (window.matchMedia("(max-width: 720px)").matches && interactiveNodes[0]) {
@@ -831,14 +835,14 @@ function renderDashboard() {
       countBy(state.users, (user) => user.objective, objectiveLabels),
       "Nenhum aluno cadastrado ainda.",
       "alunos por objetivo",
-      ["#ff6a00", "#38bdf8", "#7dd3fc", "#a78bfa", "#ffd166"]
+      ["#ff6a00", "#22c55e", "#38bdf8", "#a78bfa", "#facc15"]
     );
     renderDonutChart(
       $("#dashboard-environments"),
       countBy(state.users, (user) => user.trainingEnvironment, environmentLabels),
       "Nenhum ambiente de treino registrado ainda.",
       "alunos por ambiente",
-      ["#ff6a00", "#4ade80", "#a3e635", "#38bdf8"]
+      ["#ff6a00", "#3b82f6", "#10b981", "#a855f7"]
     );
   } else {
     renderDonutChart(

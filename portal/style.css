@@ -593,6 +593,7 @@ textarea {
   stroke-width: 36;
   stroke-linecap: butt;
   cursor: pointer;
+  pointer-events: stroke;
   transition:
     opacity 0.18s ease,
     filter 0.18s ease,
@@ -643,6 +644,7 @@ textarea {
   opacity: 0;
   transform: translateY(-4px);
   pointer-events: none;
+  z-index: 4;
   transition:
     opacity 0.18s ease,
     transform 0.18s ease;
