@@ -709,12 +709,12 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   container.innerHTML = `
     <div class="donut-chart">
       <div class="donut-hover-card" data-donut-hover-card>
-        <div class="donut-hover-title">resumo</div>
-        <div class="donut-hover-row">
-          <span class="legend-swatch" data-donut-hover-swatch></span>
-          <strong data-donut-hover-label>Passe o mouse no grafico</strong>
-          <strong data-donut-hover-total>--</strong>
-          <span data-donut-hover-percent>--</span>
+        <div class="donut-hover-title">status</div>
+        <div class="donut-hover-list" data-donut-hover-list></div>
+        <div class="donut-hover-footer">
+          <strong>Total</strong>
+          <strong data-donut-hover-grand-total>${escapeHtml(total)}</strong>
+          <span>100%</span>
         </div>
       </div>
       <div class="donut-visual">
@@ -743,8 +743,8 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
               .join("")}
           </svg>
           <div class="donut-hole">
-            <strong>${escapeHtml(total)}</strong>
-            <span>${escapeHtml(centerLabel)}</span>
+            <strong data-donut-center-value>${escapeHtml(total)}</strong>
+            <span data-donut-center-label>${escapeHtml(centerLabel)}</span>
           </div>
         </div>
       </div>
@@ -771,10 +771,9 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   `;
 
   const hoverCard = container.querySelector("[data-donut-hover-card]");
-  const hoverLabel = container.querySelector("[data-donut-hover-label]");
-  const hoverTotal = container.querySelector("[data-donut-hover-total]");
-  const hoverPercent = container.querySelector("[data-donut-hover-percent]");
-  const hoverSwatch = container.querySelector("[data-donut-hover-swatch]");
+  const hoverList = container.querySelector("[data-donut-hover-list]");
+  const centerValue = container.querySelector("[data-donut-center-value]");
+  const centerLabelNode = container.querySelector("[data-donut-center-label]");
   const segmentNodes = [...container.querySelectorAll(".donut-segment")];
   const legendNodes = [...container.querySelectorAll(".legend-row[data-donut-index]")];
 
@@ -787,16 +786,43 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     });
   };
 
-  const showHover = (segment) => {
-    if (!hoverCard || !hoverLabel || !hoverTotal || !hoverPercent || !hoverSwatch) {
+  const renderHoverList = (activeIndex = null) => {
+    if (!hoverList) {
       return;
     }
 
-    hoverLabel.textContent = segment.label ?? "";
-    hoverTotal.textContent = String(segment.total ?? "");
-    hoverPercent.textContent = `${((segment.ratio ?? 0) * 100).toFixed(1)}%`;
-    hoverSwatch.style.background = segment.color ?? "#ffffff";
+    hoverList.innerHTML = segmentsWithMeta
+      .map((segment) => {
+        const percent = `${((segment.ratio ?? 0) * 100).toFixed(1)}%`;
+        return `
+          <div class="donut-hover-row${activeIndex === segment.index ? " active" : ""}">
+            <span class="legend-swatch" style="background:${segment.color}"></span>
+            <strong>${escapeHtml(segment.label)}</strong>
+            <strong>${escapeHtml(segment.total)}</strong>
+            <span>${escapeHtml(percent)}</span>
+          </div>
+        `;
+      })
+      .join("");
+  };
+
+  const showBaseState = () => {
+    centerValue.textContent = String(total);
+    centerLabelNode.textContent = centerLabel;
+    hoverCard?.classList.remove("visible");
+    renderHoverList(null);
+    setActive(null, false);
+  };
+
+  const showHover = (segment) => {
+    if (!hoverCard || !centerValue || !centerLabelNode) {
+      return;
+    }
+
+    centerValue.textContent = String(segment.total ?? "");
+    centerLabelNode.textContent = segment.label ?? "";
     hoverCard.classList.add("visible");
+    renderHoverList(segment.index);
     setActive(segment.index, true);
   };
 
@@ -804,9 +830,7 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     if (window.matchMedia("(max-width: 720px)").matches) {
       return;
     }
-
-    hoverCard?.classList.remove("visible");
-    setActive(null, false);
+    showBaseState();
   };
 
   const segmentsWithMeta = segments.map((segment, index) => ({
@@ -828,6 +852,8 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
 
   if (window.matchMedia("(max-width: 720px)").matches && segmentsWithMeta[0]) {
     showHover(segmentsWithMeta[0]);
+  } else {
+    showBaseState();
   }
 }
 

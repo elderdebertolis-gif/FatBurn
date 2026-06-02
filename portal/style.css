@@ -665,9 +665,36 @@ textarea {
   align-items: center;
 }
 
+.donut-hover-list {
+  display: grid;
+  gap: 6px;
+}
+
+.donut-hover-row {
+  padding: 4px 0;
+  color: rgba(255, 255, 255, 0.74);
+}
+
 .donut-hover-row strong,
-.donut-hover-row span {
+.donut-hover-row span,
+.donut-hover-footer strong,
+.donut-hover-footer span {
   white-space: nowrap;
+}
+
+.donut-hover-row.active {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.donut-hover-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 .donut-legend {
