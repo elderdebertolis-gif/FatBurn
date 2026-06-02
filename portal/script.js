@@ -779,6 +779,7 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   `;
 
   const hoverCard = container.querySelector("[data-donut-hover-card]");
+  const hoverTitle = container.querySelector(".donut-hover-title");
   const hoverList = container.querySelector("[data-donut-hover-list]");
   const centerValue = container.querySelector("[data-donut-center-value]");
   const centerLabelNode = container.querySelector("[data-donut-center-label]");
@@ -787,10 +788,14 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
 
   const setActive = (index, visible) => {
     segmentNodes.forEach((node) => {
-      node.classList.toggle("active", visible && node.dataset.donutIndex === String(index));
+      const isCurrent = node.dataset.donutIndex === String(index);
+      node.classList.toggle("active", visible && isCurrent);
+      node.classList.toggle("dimmed", visible && !isCurrent);
     });
     legendNodes.forEach((node) => {
-      node.classList.toggle("active", visible && node.dataset.donutIndex === String(index));
+      const isCurrent = node.dataset.donutIndex === String(index);
+      node.classList.toggle("active", visible && isCurrent);
+      node.classList.toggle("dimmed", visible && !isCurrent);
     });
   };
 
@@ -817,6 +822,9 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   const showBaseState = () => {
     centerValue.textContent = String(total);
     centerLabelNode.textContent = centerLabel;
+    if (hoverTitle) {
+      hoverTitle.textContent = "Resumo";
+    }
     hoverCard?.classList.remove("visible");
     renderHoverList(null);
     setActive(null, false);
@@ -829,6 +837,9 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
 
     centerValue.textContent = String(segment.total ?? "");
     centerLabelNode.textContent = segment.label ?? "";
+    if (hoverTitle) {
+      hoverTitle.textContent = segment.label ?? "Resumo";
+    }
     hoverCard.classList.add("visible");
     renderHoverList(segment.index);
     setActive(segment.index, true);
@@ -849,11 +860,15 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
       }
     };
 
+    node.addEventListener("mouseenter", syncFromNode);
     node.addEventListener("pointerenter", syncFromNode);
     node.addEventListener("pointermove", syncFromNode);
+    node.addEventListener("mousemove", syncFromNode);
   });
 
-  container.querySelector(".donut-visual")?.addEventListener("pointerleave", hideHover);
+  const visualNode = container.querySelector(".donut-visual");
+  visualNode?.addEventListener("mouseleave", hideHover);
+  visualNode?.addEventListener("pointerleave", hideHover);
 
   if (window.matchMedia("(max-width: 720px)").matches && segmentsWithMeta[0]) {
     showHover(segmentsWithMeta[0]);
