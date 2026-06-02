@@ -302,6 +302,30 @@ function clearSession() {
   stopAutoRefresh();
 }
 
+function resetPortalUiForLoggedOut(options = {}) {
+  const { preserveNotice = false } = options;
+
+  clearSession();
+  resetCollections();
+  state.activeScreen = "dashboard";
+  state.studentQuery = "";
+  state.exerciseQuery = "";
+  $("#portal-login-password").value = "";
+  $("#students-search").value = "";
+  $("#exercises-search").value = "";
+  setLoginBusy(false);
+  setSidebarOpen(false);
+  syncAuthUi();
+  renderUsers();
+  renderExercises();
+  renderPortalUsers();
+  syncNavigation();
+
+  if (!preserveNotice) {
+    $("#notice").classList.add("hidden");
+  }
+}
+
 function setLoading(isLoading, title = "Carregando portal", message = "Aguarde alguns segundos.") {
   const overlay = $("#portal-loading");
   const titleNode = $("#portal-loading-title");
@@ -758,8 +782,7 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     if (response.status === 401) {
-      clearSession();
-      syncAuthUi();
+      resetPortalUiForLoggedOut({ preserveNotice: true });
     }
     throw new Error(data.error ?? "Falha ao carregar dados");
   }
@@ -1396,6 +1419,28 @@ async function loginInstructor() {
   }
 }
 
+async function restoreInstructorSession(storedSession) {
+  state.session = { token: storedSession.token, role: storedSession.role ?? "instructor" };
+  state.instructor = storedSession.instructor ?? null;
+
+  try {
+    await withLoading(
+      "Recuperando sessao",
+      "Validando o acesso salvo neste navegador.",
+      async () => {
+        const payload = await request("/api/auth/instructor/session");
+        persistSession(payload);
+        syncAuthUi();
+        await loadAll();
+        startAutoRefresh();
+      }
+    );
+  } catch (error) {
+    resetPortalUiForLoggedOut({ preserveNotice: true });
+    showNotice("Sessao invalida ou expirada. Entre novamente.", "error");
+  }
+}
+
 async function logoutInstructor() {
   try {
     await request("/api/auth/logout", {
@@ -1404,19 +1449,7 @@ async function logoutInstructor() {
   } catch {
   }
 
-  clearSession();
-  resetCollections();
-  state.activeScreen = "dashboard";
-  state.studentQuery = "";
-  state.exerciseQuery = "";
-  $("#students-search").value = "";
-  $("#exercises-search").value = "";
-  syncAuthUi();
-  renderUsers();
-  renderExercises();
-  renderPortalUsers();
-  syncNavigation();
-  stopAutoRefresh();
+  resetPortalUiForLoggedOut({ preserveNotice: true });
 }
 
 async function saveExercise() {
@@ -1761,12 +1794,6 @@ document.addEventListener("click", (event) => {
   handler().catch((error) => showNotice(error.message, "error"));
 });
 
-const storedSession = readStoredSession();
-if (storedSession) {
-  state.session = { token: storedSession.token, role: storedSession.role ?? "instructor" };
-  state.instructor = storedSession.instructor ?? null;
-}
-
 syncAuthUi();
 syncCreatePortalUserPermissions();
 renderUsers();
@@ -1774,23 +1801,9 @@ renderExercises();
 renderPortalUsers();
 syncNavigation();
 
-if (state.session?.token) {
-  withLoading(
-    "Recuperando sessao",
-    "Carregando os modulos liberados para este acesso.",
-    () => loadAll()
-  )
-    .then(() => {
-      startAutoRefresh();
-    })
-    .catch((error) => {
-      clearSession();
-      resetCollections();
-      syncAuthUi();
-      renderUsers();
-      renderExercises();
-      renderPortalUsers();
-      syncNavigation();
-      showNotice(error.message, "error");
-    });
+const storedSession = readStoredSession();
+if (storedSession) {
+  restoreInstructorSession(storedSession).catch((error) => {
+    console.error("Falha ao restaurar sessao do portal:", error);
+  });
 }

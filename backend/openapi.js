@@ -271,6 +271,30 @@ Object.assign(spec.paths, {
       },
     },
   },
+  "/api/auth/instructor/session": {
+    get: {
+      tags: ["Auth"],
+      summary: "Validar e restaurar sessao do portal",
+      security: [{ BearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Sessao do portal validada",
+          content: json({
+            type: "object",
+            properties: {
+              token: { type: "string" },
+              role: { type: "string", enum: ["instructor"] },
+              permissions: { type: "array", items: { type: "string" } },
+              instructor: PortalUser,
+            },
+            required: ["token", "role", "permissions", "instructor"],
+          }),
+        },
+        401: { $ref: "#/components/responses/Unauthorized" },
+        403: { $ref: "#/components/responses/Forbidden" },
+      },
+    },
+  },
   "/api/auth/logout": {
     post: {
       tags: ["Auth"],

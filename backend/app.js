@@ -827,6 +827,31 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (pathname === "/api/auth/instructor/session" && request.method === "GET") {
+      const authContext = await getAuthContext(request);
+      if (
+        !authContext ||
+        authContext.session.role !== "instructor" ||
+        !authContext.instructor
+      ) {
+        sendJson(response, 401, { error: "Sessao invalida ou expirada." });
+        return;
+      }
+
+      if (!authContext.instructor.isActive) {
+        sendJson(response, 403, { error: "Esse acesso do portal esta inativo." });
+        return;
+      }
+
+      sendJson(response, 200, {
+        token: authContext.token,
+        role: "instructor",
+        permissions: authContext.instructor.permissions ?? [],
+        instructor: sanitizeInstructor(authContext.instructor),
+      });
+      return;
+    }
+
     if (pathname === "/api/auth/logout" && request.method === "POST") {
       const authContext = await getAuthContext(request);
       if (!requireAuthenticated(response, authContext)) {
