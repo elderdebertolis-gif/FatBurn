@@ -556,7 +556,7 @@ textarea {
 .donut-chart {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 360px) minmax(180px, 0.8fr);
   gap: 20px;
   align-items: center;
   position: relative;
@@ -569,7 +569,7 @@ textarea {
 }
 
 .donut-ring {
-  width: min(100%, 240px);
+  width: min(100%, 300px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -592,17 +592,13 @@ textarea {
   fill: none;
   stroke-width: 36;
   stroke-linecap: butt;
-  cursor: pointer;
-  pointer-events: stroke;
   transition:
-    opacity 0.18s ease,
     filter 0.18s ease,
-    stroke-width 0.18s ease;
+    opacity 0.18s ease;
 }
 
-.donut-segment:hover,
 .donut-segment.active {
-  stroke-width: 40;
+  opacity: 0.88;
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.28));
 }
 
@@ -675,7 +671,7 @@ textarea {
 
 .donut-legend {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .legend-row {
@@ -683,18 +679,16 @@ textarea {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--card-soft);
-  cursor: pointer;
   transition:
     border-color 0.18s ease,
     transform 0.18s ease,
     background 0.18s ease;
 }
 
-.legend-row:hover,
 .legend-row.active {
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.06);
@@ -710,16 +704,19 @@ textarea {
 .legend-label {
   color: var(--text);
   font-weight: 600;
+  font-size: 14px;
 }
 
 .legend-total {
   color: var(--text);
   font-weight: 700;
+  font-size: 14px;
 }
 
 .legend-percent {
   color: var(--muted);
   font-weight: 600;
+  font-size: 14px;
 }
 
 .summary-row {

@@ -651,6 +651,7 @@ function toCircleMetrics(entries) {
   const circumference = 2 * Math.PI * radius;
   const total = entries.reduce((sum, item) => sum + item.total, 0);
   let offset = 0;
+  let cumulativeRatio = 0;
 
   return {
     radius,
@@ -659,11 +660,15 @@ function toCircleMetrics(entries) {
     segments: entries.map((entry) => {
       const ratio = total ? entry.total / total : 0;
       const length = circumference * ratio;
+      const startRatio = cumulativeRatio;
+      cumulativeRatio += ratio;
       const current = {
         ...entry,
         ratio,
         length,
         offset,
+        startRatio,
+        endRatio: cumulativeRatio,
       };
       offset += length;
       return current;
@@ -711,6 +716,8 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
                     data-donut-total="${escapeHtml(entry.total)}"
                     data-donut-percent="${escapeHtml(percent)}"
                     data-donut-color="${escapeHtml(color)}"
+                    data-donut-start="${entry.startRatio}"
+                    data-donut-end="${entry.endRatio}"
                     cx="110"
                     cy="110"
                     r="${radius}"
@@ -736,12 +743,8 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
             const percent = ((entry.total / total) * 100).toFixed(1);
             return `
               <div
-                class="legend-row donut-interactive"
+                class="legend-row"
                 data-donut-index="${index}"
-                data-donut-label="${escapeHtml(entry.label)}"
-                data-donut-total="${escapeHtml(entry.total)}"
-                data-donut-percent="${escapeHtml(percent)}"
-                data-donut-color="${escapeHtml(color)}"
               >
                 <span class="legend-swatch" style="background:${color}"></span>
                 <span class="legend-label">${escapeHtml(entry.label)}</span>
@@ -760,25 +763,32 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   const hoverTotal = container.querySelector("[data-donut-hover-total]");
   const hoverPercent = container.querySelector("[data-donut-hover-percent]");
   const hoverSwatch = container.querySelector("[data-donut-hover-swatch]");
-  const interactiveNodes = [...container.querySelectorAll(".donut-interactive")];
+  const donutSvg = container.querySelector(".donut-svg");
+  const segmentNodes = [...container.querySelectorAll(".donut-segment")];
+  const legendNodes = [...container.querySelectorAll(".legend-row[data-donut-index]")];
+  const hitOuterRadius = radius + 22;
+  const hitInnerRadius = radius - 22;
 
   const setActive = (index, visible) => {
-    interactiveNodes.forEach((node) => {
+    segmentNodes.forEach((node) => {
+      node.classList.toggle("active", visible && node.dataset.donutIndex === String(index));
+    });
+    legendNodes.forEach((node) => {
       node.classList.toggle("active", visible && node.dataset.donutIndex === String(index));
     });
   };
 
-  const showHover = (target) => {
+  const showHover = (segment) => {
     if (!hoverCard || !hoverLabel || !hoverTotal || !hoverPercent || !hoverSwatch) {
       return;
     }
 
-    hoverLabel.textContent = target.dataset.donutLabel ?? "";
-    hoverTotal.textContent = target.dataset.donutTotal ?? "";
-    hoverPercent.textContent = `${target.dataset.donutPercent ?? "0"}%`;
-    hoverSwatch.style.background = target.dataset.donutColor ?? "#ffffff";
+    hoverLabel.textContent = segment.label ?? "";
+    hoverTotal.textContent = String(segment.total ?? "");
+    hoverPercent.textContent = `${((segment.ratio ?? 0) * 100).toFixed(1)}%`;
+    hoverSwatch.style.background = segment.color ?? "#ffffff";
     hoverCard.classList.add("visible");
-    setActive(target.dataset.donutIndex, true);
+    setActive(segment.index, true);
   };
 
   const hideHover = () => {
@@ -790,15 +800,56 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     setActive(null, false);
   };
 
-  interactiveNodes.forEach((node) => {
-    node.addEventListener("pointerenter", () => showHover(node));
-    node.addEventListener("pointerleave", hideHover);
-    node.addEventListener("focus", () => showHover(node));
-    node.addEventListener("blur", hideHover);
+  const segmentsWithMeta = segments.map((segment, index) => ({
+    ...segment,
+    index,
+    color: colors[index % colors.length],
+  }));
+
+  const resolveSegmentFromEvent = (event) => {
+    if (!(donutSvg instanceof SVGElement)) {
+      return null;
+    }
+
+    const rect = donutSvg.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    const scaleX = 220 / rect.width;
+    const scaleY = 220 / rect.height;
+    const x = (event.clientX - rect.left) * scaleX - 110;
+    const y = (event.clientY - rect.top) * scaleY - 110;
+    const distance = Math.sqrt(x * x + y * y);
+
+    if (distance < hitInnerRadius || distance > hitOuterRadius) {
+      return null;
+    }
+
+    const angle = (Math.atan2(y, x) * 180) / Math.PI;
+    const normalized = (angle + 450) % 360;
+    const ratio = normalized / 360;
+
+    return (
+      segmentsWithMeta.find(
+        (segment) => ratio >= segment.startRatio && ratio < segment.endRatio
+      ) ?? segmentsWithMeta[segmentsWithMeta.length - 1]
+    );
+  };
+
+  donutSvg?.addEventListener("pointermove", (event) => {
+    const segment = resolveSegmentFromEvent(event);
+    if (!segment) {
+      hideHover();
+      return;
+    }
+    showHover(segment);
   });
 
-  if (window.matchMedia("(max-width: 720px)").matches && interactiveNodes[0]) {
-    showHover(interactiveNodes[0]);
+  donutSvg?.addEventListener("pointerleave", hideHover);
+
+  if (window.matchMedia("(max-width: 720px)").matches && segmentsWithMeta[0]) {
+    showHover(segmentsWithMeta[0]);
   }
 }
 
