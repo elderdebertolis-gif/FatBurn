@@ -646,6 +646,29 @@ function countBy(items, resolveKey, labels) {
     }));
 }
 
+function toCircleMetrics(entries) {
+  const radius = 78;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  return {
+    radius,
+    circumference,
+    segments: entries.map((entry) => {
+      const ratio = entry.total / entries.reduce((sum, item) => sum + item.total, 0);
+      const length = circumference * ratio;
+      const current = {
+        ...entry,
+        ratio,
+        length,
+        offset,
+      };
+      offset += length;
+      return current;
+    }),
+  };
+}
+
 function renderDonutChart(container, entries, emptyMessage, centerLabel, colors) {
   if (!container) {
     return;
@@ -657,21 +680,47 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   }
 
   const total = entries.reduce((sum, entry) => sum + entry.total, 0);
-  let offset = 0;
-  const gradient = entries
-    .map((entry, index) => {
-      const start = (offset / total) * 100;
-      offset += entry.total;
-      const end = (offset / total) * 100;
-      const color = colors[index % colors.length];
-      return `${color} ${start}% ${end}%`;
-    })
-    .join(", ");
+  const { radius, circumference, segments } = toCircleMetrics(entries);
 
   container.innerHTML = `
     <div class="donut-chart">
+      <div class="donut-hover-card" data-donut-hover-card>
+        <div class="donut-hover-title">resumo</div>
+        <div class="donut-hover-row">
+          <span class="legend-swatch" data-donut-hover-swatch></span>
+          <strong data-donut-hover-label>Passe o mouse no grafico</strong>
+          <strong data-donut-hover-total>--</strong>
+          <span data-donut-hover-percent>--</span>
+        </div>
+      </div>
       <div class="donut-visual">
-        <div class="donut-ring" style="background: conic-gradient(${gradient});">
+        <div class="donut-ring">
+          <svg class="donut-svg" viewBox="0 0 220 220" aria-hidden="true">
+            <circle class="donut-track" cx="110" cy="110" r="${radius}"></circle>
+            ${segments
+              .map((entry, index) => {
+                const color = colors[index % colors.length];
+                const percent = (entry.ratio * 100).toFixed(1);
+                return `
+                  <circle
+                    class="donut-segment donut-interactive"
+                    data-donut-index="${index}"
+                    data-donut-label="${escapeHtml(entry.label)}"
+                    data-donut-total="${escapeHtml(entry.total)}"
+                    data-donut-percent="${escapeHtml(percent)}"
+                    data-donut-color="${escapeHtml(color)}"
+                    cx="110"
+                    cy="110"
+                    r="${radius}"
+                    stroke="${color}"
+                    stroke-dasharray="${entry.length} ${Math.max(circumference - entry.length, 0)}"
+                    stroke-dashoffset="${-entry.offset}"
+                    transform="rotate(-90 110 110)"
+                  ></circle>
+                `;
+              })
+              .join("")}
+          </svg>
           <div class="donut-hole">
             <strong>${escapeHtml(total)}</strong>
             <span>${escapeHtml(centerLabel)}</span>
@@ -684,7 +733,14 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
             const color = colors[index % colors.length];
             const percent = ((entry.total / total) * 100).toFixed(1);
             return `
-              <div class="legend-row">
+              <div
+                class="legend-row donut-interactive"
+                data-donut-index="${index}"
+                data-donut-label="${escapeHtml(entry.label)}"
+                data-donut-total="${escapeHtml(entry.total)}"
+                data-donut-percent="${escapeHtml(percent)}"
+                data-donut-color="${escapeHtml(color)}"
+              >
                 <span class="legend-swatch" style="background:${color}"></span>
                 <span class="legend-label">${escapeHtml(entry.label)}</span>
                 <strong class="legend-total">${escapeHtml(entry.total)}</strong>
@@ -696,6 +752,50 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
       </div>
     </div>
   `;
+
+  const hoverCard = container.querySelector("[data-donut-hover-card]");
+  const hoverLabel = container.querySelector("[data-donut-hover-label]");
+  const hoverTotal = container.querySelector("[data-donut-hover-total]");
+  const hoverPercent = container.querySelector("[data-donut-hover-percent]");
+  const hoverSwatch = container.querySelector("[data-donut-hover-swatch]");
+  const interactiveNodes = [...container.querySelectorAll(".donut-interactive")];
+
+  const setActive = (index, visible) => {
+    interactiveNodes.forEach((node) => {
+      node.classList.toggle("active", visible && node.dataset.donutIndex === String(index));
+    });
+  };
+
+  const showHover = (target) => {
+    if (!hoverCard || !hoverLabel || !hoverTotal || !hoverPercent || !hoverSwatch) {
+      return;
+    }
+
+    hoverLabel.textContent = target.dataset.donutLabel ?? "";
+    hoverTotal.textContent = target.dataset.donutTotal ?? "";
+    hoverPercent.textContent = `${target.dataset.donutPercent ?? "0"}%`;
+    hoverSwatch.style.background = target.dataset.donutColor ?? "#ffffff";
+    hoverCard.classList.add("visible");
+    setActive(target.dataset.donutIndex, true);
+  };
+
+  const hideHover = () => {
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      return;
+    }
+
+    hoverCard?.classList.remove("visible");
+    setActive(null, false);
+  };
+
+  interactiveNodes.forEach((node) => {
+    node.addEventListener("mouseenter", () => showHover(node));
+    node.addEventListener("mouseleave", hideHover);
+  });
+
+  if (window.matchMedia("(max-width: 720px)").matches && interactiveNodes[0]) {
+    showHover(interactiveNodes[0]);
+  }
 }
 
 function renderDashboard() {
@@ -731,14 +831,14 @@ function renderDashboard() {
       countBy(state.users, (user) => user.objective, objectiveLabels),
       "Nenhum aluno cadastrado ainda.",
       "alunos por objetivo",
-      ["#ff6a00", "#ff8b2d", "#ffb067", "#ffd3b0"]
+      ["#ff6a00", "#38bdf8", "#7dd3fc", "#a78bfa", "#ffd166"]
     );
     renderDonutChart(
       $("#dashboard-environments"),
       countBy(state.users, (user) => user.trainingEnvironment, environmentLabels),
       "Nenhum ambiente de treino registrado ainda.",
       "alunos por ambiente",
-      ["#ff6a00", "#d9d9d9", "#8d8d8d"]
+      ["#ff6a00", "#4ade80", "#a3e635", "#38bdf8"]
     );
   } else {
     renderDonutChart(
