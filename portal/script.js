@@ -714,15 +714,6 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
 
   container.innerHTML = `
     <div class="donut-chart">
-      <div class="donut-hover-card" data-donut-hover-card>
-        <div class="donut-hover-title">status</div>
-        <div class="donut-hover-list" data-donut-hover-list></div>
-        <div class="donut-hover-footer">
-          <strong>Total</strong>
-          <strong data-donut-hover-grand-total>${escapeHtml(total)}</strong>
-          <span>100%</span>
-        </div>
-      </div>
       <div class="donut-visual">
         <div class="donut-ring">
           <svg class="donut-svg" viewBox="0 0 220 220" aria-hidden="true">
@@ -778,15 +769,10 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     </div>
   `;
 
-  const hoverCard = container.querySelector("[data-donut-hover-card]");
-  const hoverTitle = container.querySelector(".donut-hover-title");
-  const hoverList = container.querySelector("[data-donut-hover-list]");
   const centerValue = container.querySelector("[data-donut-center-value]");
   const centerLabelNode = container.querySelector("[data-donut-center-label]");
   const segmentNodes = [...container.querySelectorAll(".donut-segment")];
   const legendNodes = [...container.querySelectorAll(".legend-row[data-donut-index]")];
-  const chartNode = container.querySelector(".donut-chart");
-  const ringNode = container.querySelector(".donut-ring");
 
   const setActive = (index, visible) => {
     segmentNodes.forEach((node) => {
@@ -801,111 +787,19 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
     });
   };
 
-  const renderHoverList = (activeIndex = null) => {
-    if (!hoverList) {
-      return;
-    }
-
-    hoverList.innerHTML = segmentsWithMeta
-      .map((segment) => {
-        const percent = `${((segment.ratio ?? 0) * 100).toFixed(1)}%`;
-        return `
-          <div class="donut-hover-row${activeIndex === segment.index ? " active" : ""}">
-            <span class="legend-swatch" style="background:${segment.color}"></span>
-            <strong>${escapeHtml(segment.label)}</strong>
-            <strong>${escapeHtml(segment.total)}</strong>
-            <span>${escapeHtml(percent)}</span>
-          </div>
-        `;
-      })
-      .join("");
-  };
-
-  const updateHoverPosition = (event) => {
-    if (
-      !hoverCard ||
-      !chartNode ||
-      !ringNode ||
-      window.matchMedia("(max-width: 720px)").matches ||
-      !(event instanceof MouseEvent || event instanceof PointerEvent)
-    ) {
-      return;
-    }
-
-    const chartRect = chartNode.getBoundingClientRect();
-    const ringRect = ringNode.getBoundingClientRect();
-    const hoverRect = hoverCard.getBoundingClientRect();
-    const padding = 12;
-    const cursorX = event.clientX - chartRect.left;
-    const cursorY = event.clientY - chartRect.top;
-    const centerX = ringRect.left - chartRect.left + ringRect.width / 2;
-    const centerY = ringRect.top - chartRect.top + ringRect.height / 2;
-    const dx = cursorX - centerX;
-    const dy = cursorY - centerY;
-    const angle = Math.atan2(dy || 0.001, dx || 0.001);
-    const orbitRadiusX = ringRect.width / 2 + 24;
-    const orbitRadiusY = ringRect.height / 2 + 24;
-    const anchorX = centerX + Math.cos(angle) * orbitRadiusX;
-    const anchorY = centerY + Math.sin(angle) * orbitRadiusY;
-    const horizontalBias = Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle));
-
-    let left;
-    let top;
-
-    if (horizontalBias) {
-      left =
-        Math.cos(angle) >= 0
-          ? anchorX + 14
-          : anchorX - hoverRect.width - 14;
-      top = anchorY - hoverRect.height / 2;
-    } else {
-      left = anchorX - hoverRect.width / 2;
-      top =
-        Math.sin(angle) >= 0
-          ? anchorY + 14
-          : anchorY - hoverRect.height - 14;
-    }
-
-    const maxLeft = Math.max(padding, chartRect.width - hoverRect.width - padding);
-    const maxTop = Math.max(padding, chartRect.height - hoverRect.height - padding);
-
-    left = Math.min(Math.max(padding, left), maxLeft);
-    top = Math.min(Math.max(padding, top), maxTop);
-
-    hoverCard.style.left = `${left}px`;
-    hoverCard.style.top = `${top}px`;
-  };
-
   const showBaseState = () => {
     centerValue.textContent = String(total);
     centerLabelNode.textContent = centerLabel;
-    if (hoverTitle) {
-      hoverTitle.textContent = "Resumo";
-    }
-    hoverCard?.classList.remove("visible");
-    if (hoverCard) {
-      hoverCard.style.left = "";
-      hoverCard.style.top = "";
-    }
-    renderHoverList(null);
     setActive(null, false);
   };
 
-  const showHover = (segment, event = null) => {
-    if (!hoverCard || !centerValue || !centerLabelNode) {
+  const showHover = (segment) => {
+    if (!centerValue || !centerLabelNode) {
       return;
     }
 
     centerValue.textContent = String(segment.total ?? "");
     centerLabelNode.textContent = segment.label ?? "";
-    if (hoverTitle) {
-      hoverTitle.textContent = segment.label ?? "Resumo";
-    }
-    hoverCard.classList.add("visible");
-    if (event) {
-      updateHoverPosition(event);
-    }
-    renderHoverList(segment.index);
     setActive(segment.index, true);
   };
 
@@ -917,10 +811,10 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   };
 
   segmentNodes.forEach((node) => {
-    const syncFromNode = (event) => {
+    const syncFromNode = () => {
       const segment = segmentsWithMeta[Number(node.dataset.donutIndex)];
       if (segment) {
-        showHover(segment, event);
+        showHover(segment);
       }
     };
 

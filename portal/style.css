@@ -633,77 +633,6 @@ textarea {
   line-height: 1.35;
 }
 
-.donut-hover-card {
-  position: absolute;
-  top: 0;
-  left: 0;
-  min-width: 210px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--line-strong);
-  background: #27303a;
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.32);
-  display: grid;
-  gap: 8px;
-  opacity: 0;
-  transform: translate3d(0, -4px, 0);
-  pointer-events: none;
-  z-index: 4;
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.donut-hover-card.visible {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-}
-
-.donut-hover-title {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 12px;
-  text-transform: lowercase;
-}
-
-.donut-hover-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.donut-hover-list {
-  display: grid;
-  gap: 6px;
-}
-
-.donut-hover-row {
-  padding: 4px 0;
-  color: rgba(255, 255, 255, 0.74);
-}
-
-.donut-hover-row strong,
-.donut-hover-row span,
-.donut-hover-footer strong,
-.donut-hover-footer span {
-  white-space: nowrap;
-}
-
-.donut-hover-row.active {
-  color: #ffffff;
-  font-weight: 700;
-}
-
-.donut-hover-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
-  align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
 .donut-legend {
   display: grid;
   gap: 10px;
@@ -1041,15 +970,6 @@ label span {
 
   .donut-chart {
     grid-template-columns: 1fr;
-  }
-
-  .donut-hover-card {
-    position: static;
-    min-width: 0;
-    width: 100%;
-    opacity: 1;
-    transform: none;
-    margin-bottom: 10px;
   }
 
   .section-tools,
