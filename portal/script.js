@@ -785,6 +785,7 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   const centerLabelNode = container.querySelector("[data-donut-center-label]");
   const segmentNodes = [...container.querySelectorAll(".donut-segment")];
   const legendNodes = [...container.querySelectorAll(".legend-row[data-donut-index]")];
+  const chartNode = container.querySelector(".donut-chart");
 
   const setActive = (index, visible) => {
     segmentNodes.forEach((node) => {
@@ -819,6 +820,35 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
       .join("");
   };
 
+  const updateHoverPosition = (event) => {
+    if (
+      !hoverCard ||
+      !chartNode ||
+      window.matchMedia("(max-width: 720px)").matches ||
+      !(event instanceof MouseEvent || event instanceof PointerEvent)
+    ) {
+      return;
+    }
+
+    const chartRect = chartNode.getBoundingClientRect();
+    const hoverRect = hoverCard.getBoundingClientRect();
+    const offsetX = 18;
+    const offsetY = 18;
+    const maxLeft = Math.max(12, chartRect.width - hoverRect.width - 12);
+    const maxTop = Math.max(12, chartRect.height - hoverRect.height - 12);
+    const left = Math.min(
+      Math.max(12, event.clientX - chartRect.left + offsetX),
+      maxLeft
+    );
+    const top = Math.min(
+      Math.max(12, event.clientY - chartRect.top + offsetY),
+      maxTop
+    );
+
+    hoverCard.style.left = `${left}px`;
+    hoverCard.style.top = `${top}px`;
+  };
+
   const showBaseState = () => {
     centerValue.textContent = String(total);
     centerLabelNode.textContent = centerLabel;
@@ -826,11 +856,15 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
       hoverTitle.textContent = "Resumo";
     }
     hoverCard?.classList.remove("visible");
+    if (hoverCard) {
+      hoverCard.style.left = "";
+      hoverCard.style.top = "";
+    }
     renderHoverList(null);
     setActive(null, false);
   };
 
-  const showHover = (segment) => {
+  const showHover = (segment, event = null) => {
     if (!hoverCard || !centerValue || !centerLabelNode) {
       return;
     }
@@ -841,6 +875,9 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
       hoverTitle.textContent = segment.label ?? "Resumo";
     }
     hoverCard.classList.add("visible");
+    if (event) {
+      updateHoverPosition(event);
+    }
     renderHoverList(segment.index);
     setActive(segment.index, true);
   };
@@ -853,10 +890,10 @@ function renderDonutChart(container, entries, emptyMessage, centerLabel, colors)
   };
 
   segmentNodes.forEach((node) => {
-    const syncFromNode = () => {
+    const syncFromNode = (event) => {
       const segment = segmentsWithMeta[Number(node.dataset.donutIndex)];
       if (segment) {
-        showHover(segment);
+        showHover(segment, event);
       }
     };
 

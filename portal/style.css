@@ -635,8 +635,8 @@ textarea {
 
 .donut-hover-card {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 0;
+  left: 0;
   min-width: 210px;
   padding: 14px 16px;
   border-radius: 18px;
@@ -646,7 +646,7 @@ textarea {
   display: grid;
   gap: 8px;
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translate3d(0, -4px, 0);
   pointer-events: none;
   z-index: 4;
   transition:
@@ -656,7 +656,7 @@ textarea {
 
 .donut-hover-card.visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
 }
 
 .donut-hover-title {
