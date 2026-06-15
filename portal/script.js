@@ -1228,7 +1228,18 @@ function renderUsers() {
                   <div class="actions">
                     ${
                       canEditStudents
-                        ? `<button data-action="save-user" data-user-id="${escapeHtml(user.id)}" type="button">Salvar cadastro</button>`
+                        ? `
+                          <button data-action="save-user" data-user-id="${escapeHtml(user.id)}" type="button">Salvar cadastro</button>
+                          <button
+                            class="secondary danger-button"
+                            data-action="delete-user"
+                            data-user-id="${escapeHtml(user.id)}"
+                            data-user-name="${escapeHtml(user.name)}"
+                            type="button"
+                          >
+                            Excluir cadastro
+                          </button>
+                        `
                         : ""
                     }
                     ${
@@ -1828,6 +1839,29 @@ async function recalculateUserWorkout(button) {
   showNotice("Treino do aluno recalculado.", "success");
 }
 
+async function deleteUser(button) {
+  const userId = button.dataset.userId;
+  const userName = button.dataset.userName || "este aluno";
+  if (!userId) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Excluir o cadastro de ${userName}? Essa acao remove o aluno e seus dados vinculados.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  await request(`/api/users/${userId}`, {
+    method: "DELETE",
+  });
+
+  await loadAll();
+  showNotice("Cadastro do aluno excluido.", "success");
+}
+
 async function replaceWorkoutExercise(button) {
   const userId = button.dataset.userId;
   const workoutId = button.dataset.workoutId;
@@ -1957,6 +1991,7 @@ document.addEventListener("click", (event) => {
   const handlers = {
     "save-exercise-edit": () => saveExerciseEdit(button),
     "save-user": () => saveUser(button),
+    "delete-user": () => deleteUser(button),
     "recalculate-user-workout": () => recalculateUserWorkout(button),
     "replace-workout-exercise": () => replaceWorkoutExercise(button),
     "save-portal-user-edit": () => savePortalUserEdit(button),

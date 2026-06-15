@@ -655,6 +655,18 @@ Object.assign(spec.paths, {
         409: { description: "Email ja utilizado", content: json(ErrorResponse) },
       },
     },
+    delete: {
+      tags: ["Users"],
+      summary: "Excluir cadastro do aluno",
+      security: [{ BearerAuth: [] }],
+      parameters: [{ name: "userId", in: "path", required: true, schema: { type: "string" } }],
+      responses: {
+        200: { description: "Cadastro removido", content: json(GenericOk) },
+        401: { $ref: "#/components/responses/Unauthorized" },
+        403: { $ref: "#/components/responses/Forbidden" },
+        404: { description: "Aluno nao encontrado", content: json(ErrorResponse) },
+      },
+    },
   },
   "/api/portal-users": {
     get: {

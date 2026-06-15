@@ -1279,6 +1279,45 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (userMatch && request.method === "DELETE") {
+      const authContext = await getAuthContext(request);
+      if (!requireUserScope(response, authContext, userMatch[1])) {
+        return;
+      }
+      if (
+        authContext?.session.role === "instructor" &&
+        !requirePortalPermission(response, authContext, "students.write")
+      ) {
+        return;
+      }
+
+      const userId = userMatch[1];
+      const existingUser = await findUserRowById(userId);
+      if (!existingUser) {
+        sendJson(response, 404, { error: "Aluno nao encontrado." });
+        return;
+      }
+
+      await deleteUserAccount(userId);
+      await logAuditEvent({
+        actorType: authContext.session.role,
+        actorId: authContext.session.userId ?? authContext.session.instructorId,
+        action:
+          authContext.session.role === "instructor"
+            ? "user.delete_by_instructor"
+            : "privacy.delete_account",
+        targetType: "user",
+        targetId: userId,
+      });
+
+      if (authContext.session.role === "user") {
+        await revokeSession(authContext.token);
+      }
+
+      sendJson(response, 200, { ok: true, message: "Cadastro do aluno removido." });
+      return;
+    }
+
     const recalcMatch = pathname.match(/^\/api\/users\/([^/]+)\/recalculate$/);
     if (recalcMatch && request.method === "POST") {
       const authContext = await getAuthContext(request);

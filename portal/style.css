@@ -57,6 +57,17 @@ button.secondary {
   box-shadow: none;
 }
 
+button.secondary.danger-button {
+  border-color: rgba(255, 85, 85, 0.34);
+  color: #ff9d9d;
+}
+
+button.secondary.danger-button:hover,
+button.secondary.danger-button:focus-visible {
+  background: rgba(255, 85, 85, 0.08);
+  border-color: rgba(255, 85, 85, 0.48);
+}
+
 input,
 select,
 textarea {
