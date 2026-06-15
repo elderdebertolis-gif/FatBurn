@@ -8,10 +8,12 @@ Aplicacao de treino e acompanhamento fisico com:
 
 ## Estrutura
 
+```text
 FatBurn/
 ├── backend/
 ├── mobile/
 └── portal/
+```
 
 ## Objetivos
 
